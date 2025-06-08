@@ -1,0 +1,90 @@
+# =================================================================
+# Node.js and npm/yarn specific
+# =================================================================
+# Dependencies - this is the most important one!
+node_modules/
+
+# Lockfiles - some teams commit these, some don't.
+# If you want to ensure exact dependency versions for all developers,
+# comment out the lockfile for your package manager.
+# package-lock.json
+# yarn.lock
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+# =================================================================
+# React specific (Create React App)
+# =================================================================
+# Production build directory
+build/
+dist/
+
+# Local environment variables
+# These files can contain sensitive API keys.
+# .env.local is for local overrides and should NEVER be committed.
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Only commit the template .env file (e.g., .env.example)
+# to show other developers what variables are needed.
+
+
+# =================================================================
+# Common IDE/Editor specific
+# =================================================================
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains (WebStorm, IntelliJ)
+.idea/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+
+# =================================================================
+# Operating System specific
+# =================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+
+# =================================================================
+# Testing specific
+# =================================================================
+# Test coverage reports
+coverage/
+/src/setupTests.js # If you don't want to share the default CRA setup
+
+
+# =================================================================
+# Miscellaneous
+# =================================================================
+# Temporary files
+*.tmp
+*.swp
+
+# Optional SASS cache
+.sass-cache/

@@ -1,0 +1,499 @@
+/* Global CSS with exact colors from wireframes */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Primary Colors */
+  --primary-background: #f5f5f5;
+  --content-background: #ffffff;
+  --primary-accent: #4f46e5;
+  --secondary-button: #4b5563;
+  
+  /* Text Colors */
+  --primary-text: #1f2937;
+  --secondary-text: #6b7280;
+  --border-stroke: #e5e7eb;
+  
+  /* Status Colors */
+  --success-color: #10b981;
+  --success-bg: #d1fae5;
+  --error-color: #ef4444;
+  --error-bg: #fee2e2;
+  --processing-color: #8b5cf6;
+  --processing-bg: #ede9fe;
+}
+
+body {
+  background-color: var(--primary-background);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: var(--primary-background);
+}
+
+/* Ant Design overrides */
+.ant-layout {
+  background-color: var(--primary-background) !important;
+}
+
+.ant-layout-sider {
+  background-color: var(--primary-background) !important;
+}
+
+.ant-layout-content {
+  background-color: var(--primary-background) !important;
+}
+
+.ant-menu-dark {
+  background-color: var(--primary-background) !important;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background-color: var(--primary-accent) !important;
+}
+
+.ant-card {
+  background-color: var(--content-background) !important;
+  border: 1px solid var(--border-stroke) !important;
+}
+
+.ant-btn-primary {
+  background-color: var(--primary-accent) !important;
+  border-color: var(--primary-accent) !important;
+}
+
+.ant-btn-default {
+  background-color: var(--secondary-button) !important;
+  border-color: var(--secondary-button) !important;
+  color: white !important;
+}
+
+/* Status badges */
+.status-success {
+  background-color: var(--success-bg) !important;
+  color: var(--success-color) !important;
+  border: 1px solid var(--success-color) !important;
+}
+
+.status-error {
+  background-color: var(--error-bg) !important;
+  color: var(--error-color) !important;
+  border: 1px solid var(--error-color) !important;
+}
+
+.status-processing {
+  background-color: var(--processing-bg) !important;
+  color: var(--processing-color) !important;
+  border: 1px solid var(--processing-color) !important;
+}
+
+/* Typography Classes */
+.page-title {
+  color: var(--primary-text);
+  font-size: 28px;
+  font-weight: bold;
+  margin: 0;
+  margin-bottom: 24px;
+}
+
+.card-title {
+  color: var(--primary-text);
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.secondary-text {
+  color: var(--secondary-text);
+}
+
+.sidebar-title {
+  color: var(--primary-text);
+  margin: 0;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Layout Classes */
+.main-layout {
+  min-height: 100vh;
+  background-color: var(--primary-background);
+}
+
+.content-area {
+  padding: 24px;
+  background-color: var(--primary-background);
+  min-height: 100vh;
+}
+
+.sidebar-container {
+  background-color: var(--content-background);
+  border-right: 1px solid var(--border-stroke);
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-stroke);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.user-avatar {
+  background-color: var(--primary-accent);
+  border: 2px solid var(--primary-accent);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.2);
+}
+
+.user-avatar .anticon {
+  color: white;
+}
+
+/* Statistics Cards */
+.stats-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card-blue {
+  background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+}
+
+.stats-card-green {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+}
+
+.stats-card-purple {
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+}
+
+.stats-card-orange {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+.stats-title {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stats-icon {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 20px;
+}
+
+
+
+.user-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: #F9FAFB;
+  border-radius: 6px;
+  border: 1px solid var(--border-stroke);
+}
+
+.user-email {
+  color: var(--secondary-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.signout-button {
+  color: var(--secondary-text);
+  padding: 4px;
+  min-width: auto;
+}
+
+.signout-button:hover {
+  color: var(--primary-accent);
+  background-color: rgba(79, 70, 229, 0.1);
+}
+
+.sidebar-menu {
+  background-color: var(--content-background);
+  border: none;
+  margin-top: 16px;
+}
+
+/* Card Classes */
+.content-card {
+  background-color: var(--content-background);
+  border: 1px solid var(--border-stroke);
+}
+
+.full-height-card {
+  background-color: var(--content-background);
+  border: 1px solid var(--border-stroke);
+  height: 100%;
+}
+
+/* Button Classes */
+.primary-button {
+  background-color: var(--primary-accent);
+  border-color: var(--primary-accent);
+  color: white;
+}
+
+.secondary-button {
+  background-color: var(--secondary-button);
+  border-color: var(--secondary-button);
+  color: white;
+}
+
+.full-width-button {
+  width: 100%;
+}
+
+/* Flex Layout Classes */
+.flex-row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.flex-column-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Icon Colors */
+.primary-icon {
+  color: var(--primary-accent);
+}
+
+.success-icon {
+  color: var(--success-color);
+}
+
+.processing-icon {
+  color: var(--processing-color);
+}
+
+/* Statistic Colors */
+.statistic-title {
+  color: var(--secondary-text);
+}
+
+.statistic-value {
+  color: var(--primary-text);
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Activity Timeline */
+.activity-text {
+  color: var(--primary-text);
+  margin: 0 0 4px 0;
+}
+
+.activity-timestamp {
+  color: var(--secondary-text);
+  font-size: 12px;
+}
+
+/* Status Tags */
+.status-tag {
+  font-size: 11px;
+}
+
+.status-tag-success {
+  background-color: var(--success-bg);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+  font-size: 11px;
+}
+
+.status-tag-error {
+  background-color: var(--error-bg);
+  color: var(--error-color);
+  border: 1px solid var(--error-color);
+  font-size: 11px;
+}
+
+.status-tag-processing {
+  background-color: var(--processing-bg);
+  color: var(--processing-color);
+  border: 1px solid var(--processing-color);
+  font-size: 11px;
+}
+
+/* Task Executor Styles */
+.page-header {
+  background: white;
+  padding: 24px 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 24px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.create-task-button {
+  background-color: var(--primary-accent);
+  border-color: var(--primary-accent);
+  font-weight: 600;
+}
+
+.create-task-button:hover {
+  background-color: #3730A3;
+  border-color: #3730A3;
+}
+
+.task-table-container {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.task-table .ant-table {
+  border-radius: 8px;
+}
+
+.task-table .ant-table-thead > tr > th {
+  background-color: #fafafa;
+  font-weight: 600;
+  color: var(--primary-text);
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.task-table .ant-table-tbody > tr > td {
+  padding: 16px;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.task-table .ant-table-tbody > tr:hover > td {
+  background-color: #f8f9fa;
+}
+
+.task-id {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--secondary-text);
+  background-color: #f5f5f5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.dataset-name, .model-name {
+  font-weight: 500;
+  color: var(--primary-text);
+}
+
+.status-tag {
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ant-tag.ant-tag-success {
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+  color: #389e0d;
+}
+
+.ant-tag.ant-tag-error {
+  background-color: #fff2f0;
+  border-color: #ffccc7;
+  color: #cf1322;
+}
+
+.ant-tag.ant-tag-processing {
+  background-color: #f9f0ff;
+  border-color: #d3adf7;
+  color: #722ed1;
+}
+
+.ant-pagination {
+  margin-top: 24px;
+}
+
+.ant-pagination .ant-pagination-total-text {
+  color: var(--secondary-text);
+}
+
+/* Transfer Component Styles */
+.transfer-small-buttons .ant-transfer-operation .ant-btn {
+  background-color: var(--primary-accent) !important;
+  border-color: var(--primary-accent) !important;
+  color: white !important;
+  font-weight: bold !important;
+  font-size: 14px !important;
+  height: 32px !important;
+  width: 32px !important;
+  border-radius: 50% !important;
+  margin: 4px 0 !important;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3) !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.transfer-small-buttons .ant-transfer-operation .ant-btn:hover {
+  background-color: #3730A3 !important;
+  border-color: #3730A3 !important;
+  transform: scale(1.1) !important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4) !important;
+}
+
+.transfer-small-buttons .ant-transfer-operation .ant-btn:disabled {
+  background-color: #d1d5db !important;
+  border-color: #d1d5db !important;
+  color: #9ca3af !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.transfer-small-buttons .ant-transfer-operation {
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 0 16px !important;
+}
+
+.ant-pagination .ant-pagination-total-text {
+  color: var(--secondary-text);
+} 
