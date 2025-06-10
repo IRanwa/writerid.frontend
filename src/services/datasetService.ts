@@ -93,12 +93,24 @@ const deleteDataset = async (datasetId: string): Promise<void> => {
   }
 };
 
+const generateSasUrl = async (datasetId: string): Promise<{ sasUrl: string }> => {
+  try {
+    const response = await api.post(`/api/v1/Datasets/${datasetId}/generate-sas`);
+    console.log('Generate SAS URL response:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('Generate SAS URL error:', error);
+    throw error;
+  }
+};
+
 const datasetService = {
   getDatasets,
   createDataset,
   startAnalysis,
   getAnalysisResults,
   deleteDataset,
+  generateSasUrl,
 };
 
 export default datasetService; 

@@ -696,43 +696,48 @@ const DatasetsList: React.FC = () => {
           <Button 
             key="generate" 
             type="primary" 
-            onClick={() => {
+            onClick={async () => {
               const selectedDataset = getSelectedDataset();
               if (selectedDataset) {
-                const newSasUrl = `https://yourstorageaccount.blob.core.windows.net/datasets/${selectedDataset.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}?sv=2022-11-02&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2024-12-31T23:59:59Z&st=2024-01-01T00:00:00Z&spr=https&sig=mockSignature${Date.now()}`;
-                setSasUrl(newSasUrl);
-                setIsGenerateUrlModalOpen(false);
-                
-                Modal.success({
-                  title: 'Access URL Generated',
-                  content: (
-                    <div>
-                      <p>Access URL has been generated successfully:</p>
-                      <div style={{ 
-                        backgroundColor: '#f5f5f5', 
-                        padding: '12px', 
-                        borderRadius: '6px',
-                        border: '1px solid #d9d9d9',
-                        marginTop: '12px'
-                      }}>
-                        <Paragraph 
-                          code 
-                          copyable={{ 
-                            tooltips: ['Copy URL', 'Copied!']
-                          }}
-                          style={{ 
-                            margin: 0, 
-                            wordBreak: 'break-all',
-                            fontSize: '12px'
-                          }}
-                        >
-                          {newSasUrl}
-                        </Paragraph>
+                try {
+                  const result = await datasetService.generateSasUrl(selectedDataset.id);
+                  setSasUrl(result.sasUrl);
+                  setIsGenerateUrlModalOpen(false);
+                  
+                  Modal.success({
+                    title: 'Access URL Generated',
+                    content: (
+                      <div>
+                        <p>Access URL has been generated successfully:</p>
+                        <div style={{ 
+                          backgroundColor: '#f5f5f5', 
+                          padding: '12px', 
+                          borderRadius: '6px',
+                          border: '1px solid #d9d9d9',
+                          marginTop: '12px'
+                        }}>
+                          <Paragraph 
+                            code 
+                            copyable={{ 
+                              tooltips: ['Copy URL', 'Copied!']
+                            }}
+                            style={{ 
+                              margin: 0, 
+                              wordBreak: 'break-all',
+                              fontSize: '12px'
+                            }}
+                          >
+                            {result.sasUrl}
+                          </Paragraph>
+                        </div>
                       </div>
-                    </div>
-                  ),
-                  width: 600,
-                });
+                    ),
+                    width: 600,
+                  });
+                } catch (error: any) {
+                  console.error('Error generating SAS URL:', error);
+                  message.error(error.message || 'Failed to generate access URL');
+                }
               }
             }}
             style={{ backgroundColor: '#4F46E5', borderColor: '#4F46E5' }}
