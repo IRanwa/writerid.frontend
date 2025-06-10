@@ -1,51 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, Card, Typography, Alert, Row, Col } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { registerUser } from '../../store/slices/authSlice';
+import { RootState, AppDispatch } from '../../store/store';
+import { RegisterFormData } from '../../types/auth';
 
 const { Title, Text } = Typography;
 
-interface RegisterFormData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
-
 const Register: React.FC = () => {
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
+  const dispatch: AppDispatch = useDispatch();
 
-  const handleRegister = async (_values: RegisterFormData) => {
-    setLoading(true);
-    setError('');
-    setSuccess(false);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Mock registration success
-      setSuccess(true);
-      form.resetFields();
-      
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
+  const { loading, error } = useSelector((state: RootState) => state.auth);
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
+
+  const handleRegister = (values: RegisterFormData) => {
+    dispatch(registerUser(values)).then((result) => {
+      if (registerUser.fulfilled.match(result)) {
+        setRegistrationSuccess(true);
+        form.resetFields();
+      }
+    });
+  };
+  
+  useEffect(() => {
+    if (registrationSuccess) {
+      const timer = setTimeout(() => {
         navigate('/login');
       }, 2000);
-      
-    } catch (err) {
-      setError('Registration failed. Please try again.');
-    } finally {
-      setLoading(false);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [registrationSuccess, navigate]);
 
-  if (success) {
+  if (registrationSuccess) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -223,7 +213,7 @@ const Register: React.FC = () => {
                 <Button
                   type="primary"
                   htmlType="submit"
-                  loading={loading}
+                  loading={loading === 'pending'}
                   block
                   style={{
                     height: '48px',
@@ -234,7 +224,7 @@ const Register: React.FC = () => {
                     borderColor: '#4F46E5'
                   }}
                 >
-                  {loading ? 'Creating Account...' : 'Create Account'}
+                  {loading === 'pending' ? 'Creating Account...' : 'Create Account'}
                 </Button>
               </Form.Item>
             </Form>

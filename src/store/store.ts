@@ -3,9 +3,11 @@ import dashboardSlice from './slices/dashboardSlice';
 import tasksSlice from './slices/tasksSlice';
 import datasetsSlice from './slices/datasetsSlice';
 import modelsSlice from './slices/modelsSlice';
+import authSlice from './slices/authSlice';
 
 export const store = configureStore({
   reducer: {
+    auth: authSlice,
     dashboard: dashboardSlice,
     tasks: tasksSlice,
     datasets: datasetsSlice,

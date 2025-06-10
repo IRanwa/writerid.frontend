@@ -1,39 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Dropdown, Modal, Form, Input, Radio, Alert, Typography } from 'antd';
 import { useLocation } from 'react-router-dom';
-import { 
-  PlusOutlined, 
-  MoreOutlined, 
-  EyeOutlined, 
-  QuestionCircleOutlined,
-  InfoCircleOutlined,
-  CheckCircleOutlined,
-  CopyOutlined,
+import {
+  Card,
+  Table,
+  Button,
+  Radio,
+  Dropdown,
+  Modal,
+  Form,
+  Input,
+  Tag,
+  Alert,
+  Typography,
+  Space,
+  message,
+} from 'antd';
+import type { MenuProps, TableColumnsType } from 'antd';
+import {
+  PlusOutlined,
+  MoreOutlined,
+  EyeOutlined,
   PlayCircleOutlined,
-  LinkOutlined
+  LinkOutlined,
+  DeleteOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
-import type { MenuProps } from 'antd';
-import type { Key } from 'react';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { fetchDatasets, createDataset, deleteDataset, startAnalysis } from '../../store/slices/datasetsSlice';
 
-const { Text, Paragraph } = Typography;
-
-// Dataset interface
-interface DatasetData {
-  key: string;
-  datasetId: string;
-  name: string;
-  status: 'created' | 'processed' | 'failed' | 'processing';
-  createdAt: string;
-  size: string;
-  samples: number;
-}
+const { Paragraph, Text } = Typography;
 
 const DatasetsList: React.FC = () => {
+  const dispatch = useAppDispatch();
   const location = useLocation();
-  const [selectedDatasetKey, setSelectedDatasetKey] = useState<Key | null>(null);
+  const { datasets, loading, error } = useAppSelector((state) => state.datasets);
+  
+  const [selectedDatasetKey, setSelectedDatasetKey] = useState<string | null>(null);
   const [isNewDatasetModalOpen, setIsNewDatasetModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isGenerateUrlModalOpen, setIsGenerateUrlModalOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [newDatasetForm] = Form.useForm();
   const [showSasUrl, setShowSasUrl] = useState(false);
   const [sasUrl, setSasUrl] = useState('');
@@ -45,78 +51,58 @@ const DatasetsList: React.FC = () => {
     }
   }, [location]);
 
-  // Mock dataset data
-  const datasetData: DatasetData[] = [
-    {
-      key: '1',
-      datasetId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Historical Dataset',
-      status: 'processed',
-      createdAt: '2024-01-15 14:30:22',
-      size: '245.6 MB',
-      samples: 1250
-    },
-    {
-      key: '2',
-      datasetId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Modern Dataset',
-      status: 'failed',
-      createdAt: '2024-01-14 09:15:18',
-      size: '189.3 MB',
-      samples: 980
-    },
-    {
-      key: '3',
-      datasetId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Mixed Dataset',
-      status: 'processing',
-      createdAt: '2024-01-16 11:45:33',
-      size: '312.8 MB',
-      samples: 1567
-    },
-    {
-      key: '4',
-      datasetId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Custom Dataset',
-      status: 'created',
-      createdAt: '2024-01-16 16:20:15',
-      size: '198.4 MB',
-      samples: 892
-    }
-  ];
+  // Fetch datasets on component mount
+  useEffect(() => {
+    dispatch(fetchDatasets());
+  }, [dispatch]);
 
-  const getStatusColor = (status: string) => {
+  // Handle any fetch errors
+  useEffect(() => {
+    if (error) {
+      message.error(error);
+    }
+  }, [error]);
+
+  const refreshDatasets = async () => {
+    try {
+      await dispatch(fetchDatasets()).unwrap();
+    } catch (error) {
+      console.error('Error fetching datasets:', error);
+    }
+  };
+
+  const getStatusColor = (status: number) => {
     switch (status) {
-      case 'created':
+      case 0: // Created
         return 'default';
-      case 'processed':
-        return 'success';
-      case 'failed':
-        return 'error';
-      case 'processing':
+      case 1: // Processing
         return 'processing';
+      case 2: // Completed
+        return 'success';
+      case 3: // Failed
+        return 'error';
       default:
         return 'default';
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: number) => {
     switch (status) {
-      case 'created':
+      case 0:
         return 'Created';
-      case 'processed':
-        return 'Processed';
-      case 'failed':
-        return 'Failed';
-      case 'processing':
+      case 1:
         return 'Processing';
+      case 2:
+        return 'Completed';
+      case 3:
+        return 'Failed';
       default:
         return 'Unknown';
     }
   };
 
   const getSelectedDataset = () => {
-    return datasetData.find(dataset => dataset.key === selectedDatasetKey);
+    return datasets.find(dataset => dataset.id === selectedDatasetKey);
   };
 
   const getActionItems = (): MenuProps['items'] => {
@@ -130,7 +116,6 @@ const DatasetsList: React.FC = () => {
           icon: <EyeOutlined />,
           disabled: true,
         },
-
         {
           key: 'executeAnalysis',
           label: 'Execute Analysis',
@@ -141,6 +126,12 @@ const DatasetsList: React.FC = () => {
           key: 'generateUrl',
           label: 'Generate Access URL',
           icon: <LinkOutlined />,
+          disabled: true,
+        },
+        {
+          key: 'remove',
+          label: 'Remove Dataset',
+          icon: <DeleteOutlined />,
           disabled: true,
         },
       ];
@@ -155,8 +146,8 @@ const DatasetsList: React.FC = () => {
       },
     ];
 
-    // Execute Analysis - only if in created state
-    if (selectedDataset.status === 'created') {
+    // Execute Analysis - only if in Created state (status = 0)
+    if (selectedDataset.status === 0) {
       items.push({
         key: 'executeAnalysis',
         label: 'Execute Analysis',
@@ -164,8 +155,8 @@ const DatasetsList: React.FC = () => {
       });
     }
 
-    // Generate Access URL - for created, failed, or processed state
-    if (['created', 'failed', 'processed'].includes(selectedDataset.status)) {
+    // Generate Access URL - for Created, Completed, or Failed state
+    if ([0, 2, 3].includes(selectedDataset.status)) {
       items.push({
         key: 'generateUrl',
         label: 'Generate Access URL',
@@ -173,12 +164,27 @@ const DatasetsList: React.FC = () => {
       });
     }
 
+    // Remove Dataset - for Created, Completed, or Failed state (not Processing)
+    if ([0, 2, 3].includes(selectedDataset.status)) {
+      items.push({
+        key: 'remove',
+        label: 'Remove Dataset',
+        icon: <DeleteOutlined />,
+        danger: true,
+      });
+    }
+
     return items;
   };
 
   const handleActionClick = ({ key }: { key: string }) => {
+    console.log('Action clicked:', key);
+    console.log('Selected dataset key:', selectedDatasetKey);
+    console.log('Selected dataset object:', getSelectedDataset());
+    
     switch (key) {
       case 'view':
+        console.log('Opening details modal');
         setIsDetailsModalOpen(true);
         break;
       case 'executeAnalysis':
@@ -187,29 +193,67 @@ const DatasetsList: React.FC = () => {
       case 'generateUrl':
         setIsGenerateUrlModalOpen(true);
         break;
+      case 'remove':
+        handleRemoveDataset();
+        break;
     }
   };
 
-  const handleExecuteAnalysis = () => {
-    console.log('Executing analysis for dataset:', selectedDatasetKey);
-    // In real implementation, this would trigger the analysis API
-    // For now, just show a success message
-    Modal.success({
-      title: 'Analysis Started',
-      content: 'Dataset analysis has been initiated. You will be notified when it completes.',
+  const handleExecuteAnalysis = async () => {
+    if (!selectedDatasetKey) return;
+    
+    try {
+      await dispatch(startAnalysis(selectedDatasetKey)).unwrap();
+      message.success('Analysis started successfully');
+      await refreshDatasets(); // Refresh the list
+    } catch (error: any) {
+      console.error('Error starting analysis:', error);
+      message.error(error.message || 'Failed to start analysis');
+    }
+  };
+
+  const handleRemoveDataset = () => {
+    const selectedDataset = getSelectedDataset();
+    if (!selectedDataset) return;
+
+    Modal.confirm({
+      title: 'Remove Dataset',
+      content: `Are you sure you want to remove the dataset "${selectedDataset.name}"? This action cannot be undone.`,
+      okText: 'Remove',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        try {
+          await dispatch(deleteDataset(selectedDataset.id)).unwrap();
+          message.success('Dataset removed successfully');
+          setSelectedDatasetKey(null);
+          await refreshDatasets(); // Refresh the list
+        } catch (error: any) {
+          console.error('Error removing dataset:', error);
+          message.error(error.message || 'Failed to remove dataset');
+        }
+      },
     });
   };
 
-  const handleCreateDataset = () => {
-    newDatasetForm.validateFields().then((values) => {
+  const handleCreateDataset = async () => {
+    try {
+      const values = await newDatasetForm.validateFields();
       console.log('Creating dataset:', values);
       
-      // Mock SAS URL - in real implementation this would come from backend
-      const mockSasUrl = `https://yourstorageaccount.blob.core.windows.net/datasets/${values.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}?sv=2022-11-02&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2024-12-31T23:59:59Z&st=2024-01-01T00:00:00Z&spr=https&sig=mockSignature123`;
+      const result = await dispatch(createDataset({ name: values.name })).unwrap();
+      console.log('Dataset created:', result);
       
-      setSasUrl(mockSasUrl);
+      // Show the SAS URL
+      setSasUrl(result.sasUrl);
       setShowSasUrl(true);
-    });
+      
+      // Refresh datasets list
+      await refreshDatasets();
+    } catch (error: any) {
+      console.error('Error creating dataset:', error);
+      message.error(error.message || 'Failed to create dataset');
+    }
   };
 
   const handleNewDatasetModalClose = () => {
@@ -221,42 +265,41 @@ const DatasetsList: React.FC = () => {
 
   const handleCopySasUrl = () => {
     navigator.clipboard.writeText(sasUrl);
+    message.success('SAS URL copied to clipboard');
   };
 
-  const columns = [
+  const columns: TableColumnsType<any> = [
     {
       title: '',
-      key: 'selection',
+      key: 'select',
       width: 50,
-      render: (_: any, record: DatasetData) => (
+      render: (_, record) => (
         <Radio
-          checked={selectedDatasetKey === record.key}
-          onChange={() => setSelectedDatasetKey(record.key)}
+          checked={selectedDatasetKey === record.id}
+          onChange={() => setSelectedDatasetKey(record.id)}
         />
       ),
     },
     {
       title: 'Dataset ID',
-      dataIndex: 'datasetId',
-      key: 'datasetId',
-      render: (id: string) => (
-        <code className="task-id">{id}</code>
+      dataIndex: 'id',
+      key: 'id',
+      width: 300,
+      render: (text: string) => (
+        <span className="task-id">{text}</span>
       ),
     },
     {
       title: 'Name',
       dataIndex: 'name',
       key: 'name',
-      render: (name: string) => (
-        <span className="dataset-name">{name}</span>
-      ),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)} className="status-tag">
+      render: (status: number) => (
+        <Tag color={getStatusColor(status)}>
           {getStatusText(status)}
         </Tag>
       ),
@@ -265,172 +308,160 @@ const DatasetsList: React.FC = () => {
       title: 'Created At',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      render: (date: string) => new Date(date).toLocaleString(),
     },
     {
-      title: 'Size',
-      dataIndex: 'size',
-      key: 'size',
-    },
-    {
-      title: 'Samples',
-      dataIndex: 'samples',
-      key: 'samples',
-      render: (samples: number) => samples.toLocaleString(),
+      title: 'Updated At',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      render: (date: string | null) => date ? new Date(date).toLocaleString() : 'N/A',
     },
   ];
 
   const openGuide = () => {
-    window.open('https://example.com/dataset-upload-guide', '_blank');
+    setIsGuideModalOpen(true);
   };
 
   return (
-    <div>
-      {/* Header Section */}
-      <div className="flex-row-between">
-        <h1 className="page-title">Datasets</h1>
-        <div className="header-actions">
-          <Button 
-            icon={<QuestionCircleOutlined />}
-            onClick={openGuide}
-          >
-            Guide to Upload Dataset
-          </Button>
-          <Dropdown
-            menu={{
-              items: getActionItems(),
-              onClick: handleActionClick,
-            }}
-            placement="bottomRight"
-            disabled={!selectedDatasetKey}
-          >
-            <Button>
-              <Space>
-                Actions
-                <MoreOutlined />
-              </Space>
+    <div style={{ padding: '24px' }}>
+      <Card>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '20px' 
+        }}>
+          <h2 style={{ margin: 0 }}>Datasets</h2>
+          <Space>
+            <Button 
+              icon={<QuestionCircleOutlined />}
+              onClick={openGuide}
+            >
+              Guide to Upload Dataset
             </Button>
-          </Dropdown>
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />}
-            onClick={() => setIsNewDatasetModalOpen(true)}
-          >
-            New Dataset
-          </Button>
+            <Dropdown
+              menu={{ 
+                items: getActionItems(),
+                onClick: handleActionClick
+              }}
+              trigger={['click']}
+              disabled={!selectedDatasetKey}
+            >
+              <Button 
+                icon={<MoreOutlined />}
+                disabled={!selectedDatasetKey}
+              >
+                Actions
+              </Button>
+            </Dropdown>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setIsNewDatasetModalOpen(true)}
+            >
+              New Dataset
+            </Button>
+          </Space>
         </div>
-      </div>
 
-      {/* Datasets Table */}
-      <div className="task-table-container">
         <Table
           columns={columns}
-          dataSource={datasetData}
-          pagination={{
+          dataSource={datasets}
+          loading={loading}
+          rowKey="id"
+          pagination={{ 
+            pageSize: 10,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} of ${total} datasets`,
-            pageSize: 10,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
           }}
-          className="task-table"
-          size="middle"
         />
-      </div>
+      </Card>
 
       {/* New Dataset Modal */}
       <Modal
-        title={showSasUrl ? "Dataset Created Successfully" : "Create New Dataset"}
+        title="Create New Dataset"
         open={isNewDatasetModalOpen}
         onCancel={handleNewDatasetModalClose}
-        footer={
-          showSasUrl ? [
-            <Button key="close" type="primary" onClick={handleNewDatasetModalClose}>
-              Close
-            </Button>
-          ] : [
-            <Button key="cancel" onClick={handleNewDatasetModalClose}>
-              Cancel
-            </Button>,
-            <Button 
-              key="create" 
-              type="primary" 
-              onClick={handleCreateDataset}
-              style={{ backgroundColor: '#4F46E5', borderColor: '#4F46E5' }}
-            >
-              Create Dataset
-            </Button>
-          ]
-        }
+        footer={showSasUrl ? [
+          <Button key="close" type="primary" onClick={handleNewDatasetModalClose}>
+            Close
+          </Button>
+        ] : [
+          <Button key="cancel" onClick={handleNewDatasetModalClose}>
+            Cancel
+          </Button>,
+          <Button key="create" type="primary" onClick={handleCreateDataset}>
+            Create Dataset
+          </Button>
+        ]}
         width={600}
-        maskClosable={false}
       >
-        {showSasUrl ? (
+        {!showSasUrl ? (
+          <Form form={newDatasetForm} layout="vertical" style={{ marginTop: '20px' }}>
+            <Form.Item
+              name="name"
+              label="Dataset Name"
+              rules={[
+                { required: true, message: 'Please enter a dataset name' },
+                { min: 3, message: 'Dataset name must be at least 3 characters' },
+                { max: 50, message: 'Dataset name must not exceed 50 characters' }
+              ]}
+            >
+              <Input placeholder="Enter a descriptive name for your dataset" />
+            </Form.Item>
+          </Form>
+        ) : (
           <div style={{ marginTop: '20px' }}>
             <Alert
-              message="Dataset Created Successfully"
-              description="Your dataset has been created. Use the SAS URL below to upload your dataset files."
+              message="Dataset Created Successfully!"
+              description="Your dataset has been created. Use the SAS URL below to upload your files."
               type="success"
-              icon={<CheckCircleOutlined />}
               showIcon
               style={{ marginBottom: '20px' }}
             />
             
             <div style={{ marginBottom: '16px' }}>
-              <Text strong style={{ fontSize: '14px', marginBottom: '8px', display: 'block' }}>
-                Access URL (SAS) for Dataset Upload:
-              </Text>
-              <div style={{ 
-                backgroundColor: '#f5f5f5', 
-                padding: '12px', 
-                borderRadius: '6px',
-                border: '1px solid #d9d9d9',
-                position: 'relative'
-              }}>
-                <Paragraph 
-                  code 
-                  copyable={{ 
-                    icon: <CopyOutlined />,
-                    tooltips: ['Copy URL', 'Copied!'],
-                    onCopy: handleCopySasUrl
-                  }}
-                  style={{ 
-                    margin: 0, 
-                    wordBreak: 'break-all',
-                    fontSize: '12px'
-                  }}
-                >
-                  {sasUrl}
-                </Paragraph>
-              </div>
+              <Text strong>SAS URL for file upload:</Text>
+            </div>
+            
+            <div style={{ 
+              backgroundColor: '#f5f5f5', 
+              padding: '12px', 
+              borderRadius: '6px',
+              border: '1px solid #d9d9d9',
+              marginBottom: '16px'
+            }}>
+              <Paragraph 
+                code 
+                copyable={{ 
+                  text: sasUrl,
+                  onCopy: handleCopySasUrl,
+                  tooltips: ['Copy SAS URL', 'Copied!']
+                }}
+                style={{ 
+                  margin: 0, 
+                  wordBreak: 'break-all',
+                  fontSize: '12px'
+                }}
+              >
+                {sasUrl}
+              </Paragraph>
             </div>
             
             <Alert
-              message="Important"
-              description="This SAS URL is valid for uploading files to your dataset. Please save it securely as it will be needed for dataset upload operations."
+              message="Important Instructions"
+              description={
+                <div>
+                  <p>• This URL is temporary and will expire after a certain period</p>
+                  <p>• Use this URL with Azure Storage Explorer or similar tools to upload your dataset files</p>
+                  <p>• Need help? <Button type="link" style={{ padding: 0 }} onClick={openGuide}>Guide to Upload Dataset</Button></p>
+                </div>
+              }
               type="info"
               showIcon
-              style={{ marginTop: '16px' }}
             />
           </div>
-        ) : (
-          <Form
-            form={newDatasetForm}
-            layout="vertical"
-            style={{ marginTop: '20px' }}
-          >
-            <Form.Item
-              label={<span style={{ fontWeight: 600 }}><span style={{ color: '#ff4d4f' }}>*</span> Dataset Name</span>}
-              name="name"
-              required={false}
-              rules={[{ required: true, message: 'Please enter a dataset name!' }]}
-            >
-              <Input 
-                placeholder="Enter dataset name" 
-                size="large"
-                style={{ borderRadius: '6px' }}
-              />
-            </Form.Item>
-          </Form>
         )}
       </Modal>
 
@@ -438,42 +469,55 @@ const DatasetsList: React.FC = () => {
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <InfoCircleOutlined style={{ color: '#4F46E5' }} />
+            <EyeOutlined style={{ color: '#4F46E5' }} />
             Dataset Details
           </div>
         }
         open={isDetailsModalOpen}
         onCancel={() => setIsDetailsModalOpen(false)}
         footer={[
-          <Button key="close" onClick={() => setIsDetailsModalOpen(false)}>
+          <Button key="close" type="primary" onClick={() => setIsDetailsModalOpen(false)}>
             Close
           </Button>
         ]}
-        width={600}
+        width={700}
       >
         {getSelectedDataset() && (
           <div style={{ marginTop: '20px' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <strong>Dataset ID:</strong> 
-              <code style={{ marginLeft: '8px', fontSize: '12px', backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '4px' }}>
-                {getSelectedDataset()?.datasetId}
-              </code>
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <strong>Name:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedDataset()?.name}</span>
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <strong>Status:</strong> 
-              <Tag color={getStatusColor(getSelectedDataset()?.status || '')} style={{ marginLeft: '8px' }}>
-                {getStatusText(getSelectedDataset()?.status || '')}
-              </Tag>
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <strong>Created At:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedDataset()?.createdAt}</span>
+            {/* Basic Information */}
+            <div style={{ marginBottom: '20px' }}>
+              <h4 style={{ margin: '0 0 12px 0', color: '#1F2937', fontSize: '14px', fontWeight: 600 }}>
+                Basic Information
+              </h4>
+              <div style={{ 
+                backgroundColor: '#f8f9fa', 
+                padding: '16px', 
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb' 
+              }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>ID:</strong> <span>{getSelectedDataset()?.id}</span>
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Name:</strong> <span>{getSelectedDataset()?.name}</span>
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Status:</strong> 
+                  <Tag color={getStatusColor(getSelectedDataset()?.status || 0)} style={{ marginLeft: '8px' }}>
+                    {getStatusText(getSelectedDataset()?.status || 0)}
+                  </Tag>
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Created:</strong> <span>{new Date(getSelectedDataset()?.createdAt || '').toLocaleString()}</span>
+                </div>
+                <div>
+                  <strong>Updated:</strong> <span>{getSelectedDataset()?.updatedAt ? new Date(getSelectedDataset()?.updatedAt || '').toLocaleString() : 'N/A'}</span>
+                </div>
+              </div>
             </div>
             
-            {/* Analysis Details - only show for processed datasets */}
-            {getSelectedDataset()?.status === 'processed' && (
+            {/* Analysis Results - only show for completed datasets (status = 2) */}
+            {getSelectedDataset()?.status === 2 && (
               <>
                 <div style={{ 
                   borderTop: '1px solid #e5e7eb', 
@@ -482,18 +526,17 @@ const DatasetsList: React.FC = () => {
                   marginBottom: '16px' 
                 }}>
                   <h4 style={{ margin: '0 0 12px 0', color: '#1F2937', fontSize: '14px', fontWeight: 600 }}>
-                    Analysis Details
+                    Analysis Results
                   </h4>
                 </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <strong>Maximum Sample Count:</strong> <span style={{ marginLeft: '8px' }}>145</span>
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <strong>Minimum Sample Count:</strong> <span style={{ marginLeft: '8px' }}>23</span>
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <strong>Number of Writers:</strong> <span style={{ marginLeft: '8px' }}>12</span>
-                </div>
+                
+                                 <Alert
+                   message="Analysis Complete"
+                   description="Dataset analysis has been completed successfully. All writer samples have been processed and categorized."
+                   type="success"
+                   showIcon
+                   style={{ marginTop: '12px' }}
+                 />
               </>
             )}
           </div>
@@ -582,11 +625,10 @@ const DatasetsList: React.FC = () => {
             }}>
               <div><strong>Dataset:</strong> {getSelectedDataset()?.name}</div>
               <div><strong>Status:</strong> 
-                <Tag color={getStatusColor(getSelectedDataset()?.status || '')} style={{ marginLeft: '8px' }}>
-                  {getStatusText(getSelectedDataset()?.status || '')}
+                <Tag color={getStatusColor(getSelectedDataset()?.status || 0)} style={{ marginLeft: '8px' }}>
+                  {getStatusText(getSelectedDataset()?.status || 0)}
                 </Tag>
               </div>
-              <div><strong>Size:</strong> {getSelectedDataset()?.size}</div>
             </div>
             
             <Alert
@@ -598,6 +640,123 @@ const DatasetsList: React.FC = () => {
             />
           </div>
         )}
+      </Modal>
+
+      {/* Dataset Upload Guide Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <QuestionCircleOutlined style={{ color: '#4F46E5' }} />
+            Guide to Upload Dataset using SAS URL
+          </div>
+        }
+        open={isGuideModalOpen}
+        onCancel={() => setIsGuideModalOpen(false)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setIsGuideModalOpen(false)}>
+            Got it!
+          </Button>
+        ]}
+        width={800}
+        style={{ top: 20 }}
+      >
+        <div style={{ marginTop: '20px', maxHeight: '70vh', overflowY: 'auto' }}>
+          {/* Introduction */}
+          <Alert
+            message="What is a SAS URL?"
+            description="A SAS (Shared Access Signature) URL is a secure way to upload files to cloud storage without exposing your account credentials. It provides temporary, limited access to upload your dataset files."
+            type="info"
+            showIcon
+            style={{ marginBottom: '24px' }}
+          />
+
+          {/* Step-by-step Guide */}
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ color: '#1F2937', marginBottom: '16px' }}>📋 Step-by-Step Upload Process</h3>
+            
+            {/* Step 1 */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+              <h4 style={{ color: '#4F46E5', marginBottom: '12px' }}>Step 1: Create a New Dataset</h4>
+              <p style={{ marginBottom: '12px' }}>Click the "New Dataset" button and enter a descriptive name for your dataset. After creation, you'll receive a unique SAS URL.</p>
+            </div>
+
+            {/* Step 2 */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+              <h4 style={{ color: '#4F46E5', marginBottom: '12px' }}>Step 2: Copy Your SAS URL</h4>
+              <p style={{ marginBottom: '12px' }}>After creating the dataset, copy the generated SAS URL. This URL is temporary and secure for uploading your files.</p>
+              
+              <Alert
+                message="Important"
+                description="Save this URL immediately! It's only shown once and will expire after a certain time period."
+                type="warning"
+                showIcon
+                style={{ margin: '12px 0' }}
+              />
+            </div>
+
+            {/* Step 3 */}
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+              <h4 style={{ color: '#4F46E5', marginBottom: '12px' }}>Step 3: Upload Using Azure Storage Explorer</h4>
+              <p style={{ marginBottom: '12px' }}>Use Microsoft Azure Storage Explorer or any compatible tool to upload your files:</p>
+              
+              <ol style={{ paddingLeft: '20px', marginBottom: '12px' }}>
+                <li style={{ marginBottom: '8px' }}>Download and install <a href="https://azure.microsoft.com/en-us/products/storage/storage-explorer/" target="_blank" rel="noopener noreferrer">Azure Storage Explorer</a></li>
+                <li style={{ marginBottom: '8px' }}>Open Azure Storage Explorer</li>
+                <li style={{ marginBottom: '8px' }}>Click "Add an account" → "Use a shared access signature (SAS) URI"</li>
+                <li style={{ marginBottom: '8px' }}>Paste your SAS URL and click "Next"</li>
+                <li style={{ marginBottom: '8px' }}>Navigate to the connected container and upload your files</li>
+              </ol>
+            </div>
+          </div>
+
+          {/* Organization Tips */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ padding: '16px', backgroundColor: '#f6ffed', borderRadius: '8px', border: '1px solid #b7eb8f', marginBottom: '16px' }}>
+              <h4 style={{ color: '#52c41a', marginBottom: '12px' }}>Organization Tips</h4>
+              <p style={{ marginBottom: '12px' }}>Create folders for different writers with multiple samples:</p>
+              <Alert
+                message="Important Note"
+                description="The folder name will be used as the writer name/label in the system. Make sure to use descriptive and consistent folder names."
+                type="info"
+                showIcon
+                style={{ margin: '12px 0' }}
+              />
+              <div style={{ 
+                backgroundColor: '#f0f0f0', 
+                padding: '12px', 
+                borderRadius: '4px', 
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                lineHeight: '1.6'
+              }}>
+                📁 dataset/<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;📁 writer_001/<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 sample_001.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 sample_002.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 sample_003.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 sample_004.jpg<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 sample_005.jpg<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;📁 writer_002/<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 handwriting_001.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 handwriting_002.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 handwriting_003.jpg<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 handwriting_004.jpg<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;📁 writer_003/<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 text_sample_01.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 text_sample_02.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 text_sample_03.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 signature_01.jpg<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 signature_02.jpg<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;📁 writer_004/<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 document_page1.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 document_page2.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 letter_sample.jpg<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 notes_001.png<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 notes_002.png
+              </div>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );

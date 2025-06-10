@@ -1,7 +1,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from 'antd';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useSelector } from 'react-redux';
+import { RootState } from './store/store';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Layout/Sidebar';
 import Login from './pages/Auth/Login';
@@ -21,7 +22,7 @@ import ViewModelResults from './pages/Models/ViewModelResults';
 const { Content } = Layout;
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
 
   return (
     <Routes>
@@ -184,11 +185,7 @@ const AppContent: React.FC = () => {
 };
 
 function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  return <AppContent />;
 }
 
 export default App; 

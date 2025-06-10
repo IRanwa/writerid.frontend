@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Layout, Menu, Button, Avatar, Modal } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState, AppDispatch } from '../../store/store';
+import { logout } from '../../store/slices/authSlice';
 import {
   DashboardOutlined,
   DatabaseOutlined,
@@ -17,20 +19,22 @@ const { Sider } = Layout;
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const dispatch: AppDispatch = useDispatch();
+  const { user } = useSelector((state: RootState) => state.auth);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const handleLogout = () => {
-    Modal.confirm({
-      title: 'Confirm Logout',
-      icon: <ExclamationCircleOutlined />,
-      content: 'Are you sure you want to sign out?',
-      okText: 'Sign Out',
-      cancelText: 'Cancel',
-      onOk: () => {
-        logout();
-        navigate('/login');
-      },
-    });
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
+    dispatch(logout());
+    navigate('/login');
+    setShowLogoutModal(false);
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const menuItems = [
@@ -57,43 +61,65 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <Sider width={250} className="sidebar-container">
-      <div className="sidebar-header">
-        <div className="sidebar-brand">
-          <Avatar 
-            size={48}
-            className="user-avatar"
-            icon={<UserOutlined />}
-          />
-          <h2 className="sidebar-title">
-            {user ? `${user.firstName} ${user.lastName}` : 'User'}
-          </h2>
+    <>
+      <Sider width={250} className="sidebar-container">
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
+            <Avatar 
+              size={48}
+              className="user-avatar"
+              icon={<UserOutlined />}
+            />
+            <h2 className="sidebar-title">
+              {user ? `${user.firstName} ${user.lastName}` : 'User'}
+            </h2>
+          </div>
+          <div className="user-info">
+            <span className="user-email">{user?.email || 'user@example.com'}</span>
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              size="small"
+              className="signout-button"
+              title="Sign Out"
+              onClick={handleLogoutClick}
+            />
+          </div>
         </div>
-        <div className="user-info">
-          <span className="user-email">{user?.email || 'user@example.com'}</span>
-          <Button 
-            type="text" 
-            icon={<LogoutOutlined />} 
-            size="small"
-            className="signout-button"
-            title="Sign Out"
-            onClick={handleLogout}
-          />
-        </div>
-      </div>
-      <Menu
-        theme="light"
-        mode="inline"
-        selectedKeys={[
-          location.pathname.startsWith('/tasks') ? '/tasks' :
-          location.pathname.startsWith('/datasets') ? '/datasets' :
-          location.pathname.startsWith('/models') ? '/models' :
-          location.pathname
-        ]}
-        items={menuItems}
-        className="sidebar-menu"
-      />
-    </Sider>
+        <Menu
+          theme="light"
+          mode="inline"
+          selectedKeys={[
+            location.pathname.startsWith('/tasks') ? '/tasks' :
+            location.pathname.startsWith('/datasets') ? '/datasets' :
+            location.pathname.startsWith('/models') ? '/models' :
+            location.pathname
+          ]}
+          items={menuItems}
+          className="sidebar-menu"
+        />
+      </Sider>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ExclamationCircleOutlined style={{ color: '#faad14' }} />
+            Confirm Logout
+          </div>
+        }
+        open={showLogoutModal}
+        onOk={confirmLogout}
+        onCancel={cancelLogout}
+        okText="Sign Out"
+        cancelText="Cancel"
+        okButtonProps={{
+          danger: true
+        }}
+      >
+        <p>Are you sure you want to sign out?</p>
+      </Modal>
+    </>
   );
 };
 

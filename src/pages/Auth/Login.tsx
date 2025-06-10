@@ -1,50 +1,30 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { Form, Input, Button, Card, Typography, Alert, Row, Col } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useDispatch, useSelector } from 'react-redux';
+import { loginUser } from '../../store/slices/authSlice';
+import { RootState, AppDispatch } from '../../store/store';
+import { LoginFormData } from '../../types/auth';
 
 const { Title, Text } = Typography;
 
-interface LoginFormData {
-  email: string;
-  password: string;
-}
-
 const Login: React.FC = () => {
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const dispatch: AppDispatch = useDispatch();
+  
+  const { loading, error, isAuthenticated } = useSelector((state: RootState) => state.auth);
 
-  const handleLogin = async (values: LoginFormData) => {
-    setLoading(true);
-    setError('');
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock authentication - in real app, validate with backend
-      if (values.email === 'admin@writerid.com' && values.password === 'password') {
-        const userData = {
-          email: values.email,
-          firstName: 'John',
-          lastName: 'Doe',
-          isAuthenticated: true
-        };
-        login(userData);
-        navigate('/dashboard');
-      } else {
-        setError('Invalid email or password');
-      }
-    } catch (err) {
-      setError('Login failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const handleLogin = (values: LoginFormData) => {
+    dispatch(loginUser(values));
   };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   return (
     <div style={{
@@ -89,16 +69,16 @@ const Login: React.FC = () => {
               size="large"
             >
               <Form.Item
-                label="Email Address"
-                name="email"
+                label="Username"
+                name="username"
                 rules={[
-                  { required: true, message: 'Please enter your email address!' },
-                  { type: 'email', message: 'Please enter a valid email address!' }
+                  { required: true, message: 'Please enter your username!' },
+                  { min: 3, message: 'Username must be at least 3 characters!' }
                 ]}
               >
                 <Input
                   prefix={<UserOutlined style={{ color: '#8B9DC3' }} />}
-                  placeholder="Enter your email address"
+                  placeholder="Enter your username"
                   style={{ borderRadius: '8px' }}
                 />
               </Form.Item>
@@ -122,7 +102,7 @@ const Login: React.FC = () => {
                 <Button
                   type="primary"
                   htmlType="submit"
-                  loading={loading}
+                  loading={loading === 'pending'}
                   block
                   style={{
                     height: '48px',
@@ -133,7 +113,7 @@ const Login: React.FC = () => {
                     borderColor: '#4F46E5'
                   }}
                 >
-                  {loading ? 'Signing In...' : 'Sign In'}
+                  {loading === 'pending' ? 'Signing In...' : 'Sign In'}
                 </Button>
               </Form.Item>
             </Form>
@@ -151,20 +131,6 @@ const Login: React.FC = () => {
                 >
                   Sign up here
                 </Link>
-              </Text>
-            </div>
-
-            <div style={{ 
-              marginTop: '24px', 
-              padding: '16px', 
-              backgroundColor: '#f8f9fa', 
-              borderRadius: '8px',
-              textAlign: 'center'
-            }}>
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                <strong>Demo Credentials:</strong><br />
-                Email: admin@writerid.com<br />
-                Password: password
               </Text>
             </div>
           </Card>
