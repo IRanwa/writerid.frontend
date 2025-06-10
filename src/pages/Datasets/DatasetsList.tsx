@@ -14,6 +14,7 @@ import {
   Typography,
   Space,
   message,
+  Spin,
 } from 'antd';
 import type { MenuProps, TableColumnsType } from 'antd';
 import {
@@ -27,6 +28,7 @@ import {
 } from '@ant-design/icons';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchDatasets, createDataset, deleteDataset, startAnalysis } from '../../store/slices/datasetsSlice';
+import datasetService from '../../services/datasetService';
 
 const { Paragraph, Text } = Typography;
 
@@ -40,6 +42,8 @@ const DatasetsList: React.FC = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isGenerateUrlModalOpen, setIsGenerateUrlModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [loadingAnalysisResults, setLoadingAnalysisResults] = useState(false);
   const [newDatasetForm] = Form.useForm();
   const [showSasUrl, setShowSasUrl] = useState(false);
   const [sasUrl, setSasUrl] = useState('');
@@ -186,6 +190,30 @@ const DatasetsList: React.FC = () => {
       case 'view':
         console.log('Opening details modal');
         setIsDetailsModalOpen(true);
+        
+        // Fetch analysis results if dataset is completed (status = 2)
+        const selectedDataset = getSelectedDataset();
+        if (selectedDataset && selectedDataset.status === 2) {
+          setLoadingAnalysisResults(true);
+          setAnalysisResults(null);
+          
+          datasetService.getAnalysisResults(selectedDataset.id)
+            .then((results) => {
+              console.log('Analysis results fetched:', results);
+              setAnalysisResults(results);
+            })
+            .catch((error) => {
+              console.error('Failed to fetch analysis results:', error);
+              setAnalysisResults(null);
+              message.error('Failed to load analysis results');
+            })
+            .finally(() => {
+              setLoadingAnalysisResults(false);
+            });
+        } else {
+          setAnalysisResults(null);
+          setLoadingAnalysisResults(false);
+        }
         break;
       case 'executeAnalysis':
         handleExecuteAnalysis();
@@ -530,13 +558,121 @@ const DatasetsList: React.FC = () => {
                   </h4>
                 </div>
                 
-                                 <Alert
-                   message="Analysis Complete"
-                   description="Dataset analysis has been completed successfully. All writer samples have been processed and categorized."
-                   type="success"
-                   showIcon
-                   style={{ marginTop: '12px' }}
-                 />
+                {loadingAnalysisResults ? (
+                   <div style={{ textAlign: 'center', padding: '20px' }}>
+                     <Spin size="small" />
+                     <div style={{ marginTop: '8px', color: '#8c8c8c' }}>Loading analysis results...</div>
+                   </div>
+                 ) : analysisResults ? (
+                   <div style={{ marginBottom: '16px' }}>
+                     {/* Summary Statistics */}
+                     <div style={{ 
+                       backgroundColor: '#f0f9ff', 
+                       padding: '16px', 
+                       borderRadius: '8px',
+                       border: '1px solid #bae6fd',
+                       marginBottom: '16px'
+                     }}>
+                       <h5 style={{ margin: '0 0 12px 0', color: '#0369a1', fontSize: '13px', fontWeight: 600 }}>
+                         Dataset Summary
+                       </h5>
+                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                         <div>
+                           <strong>Number of Writers:</strong> <span>{analysisResults.num_writers || 'N/A'}</span>
+                         </div>
+                         <div>
+                           <strong>Total Writers Found:</strong> <span>{analysisResults.writer_names?.length || 'N/A'}</span>
+                         </div>
+                         <div>
+                           <strong>Min Samples:</strong> <span>{analysisResults.min_samples || 'N/A'}</span>
+                         </div>
+                         <div>
+                           <strong>Max Samples:</strong> <span>{analysisResults.max_samples || 'N/A'}</span>
+                         </div>
+                       </div>
+                     </div>
+
+                     {/* Writer Names */}
+                     {analysisResults.writer_names && analysisResults.writer_names.length > 0 && (
+                       <div style={{ 
+                         backgroundColor: '#f8fafc', 
+                         padding: '16px', 
+                         borderRadius: '8px',
+                         border: '1px solid #e2e8f0',
+                         marginBottom: '16px'
+                       }}>
+                         <h5 style={{ margin: '0 0 12px 0', color: '#475569', fontSize: '13px', fontWeight: 600 }}>
+                           Writers Found ({analysisResults.writer_names.length})
+                         </h5>
+                         <div style={{ 
+                           display: 'flex', 
+                           flexWrap: 'wrap', 
+                           gap: '6px',
+                           maxHeight: '120px',
+                           overflowY: 'auto'
+                         }}>
+                           {analysisResults.writer_names.map((writer: string, index: number) => (
+                             <Tag 
+                               key={index} 
+                               color="blue" 
+                               style={{ margin: '2px', fontSize: '11px' }}
+                             >
+                               {writer}
+                             </Tag>
+                           ))}
+                         </div>
+                       </div>
+                     )}
+
+                     {/* Writer Sample Counts */}
+                     {analysisResults.writer_counts && Object.keys(analysisResults.writer_counts).length > 0 && (
+                       <div style={{ 
+                         backgroundColor: '#fefce8', 
+                         padding: '16px', 
+                         borderRadius: '8px',
+                         border: '1px solid #fde047',
+                         marginBottom: '16px'
+                       }}>
+                         <h5 style={{ margin: '0 0 12px 0', color: '#a16207', fontSize: '13px', fontWeight: 600 }}>
+                           Sample Counts per Writer
+                         </h5>
+                         <div style={{ 
+                           maxHeight: '200px', 
+                           overflowY: 'auto',
+                           fontSize: '12px'
+                         }}>
+                           <div style={{ 
+                             display: 'grid', 
+                             gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
+                             gap: '8px'
+                           }}>
+                             {Object.entries(analysisResults.writer_counts).map(([writer, count]: [string, any]) => (
+                               <div 
+                                 key={writer} 
+                                 style={{ 
+                                   backgroundColor: '#ffffff', 
+                                   padding: '8px', 
+                                   borderRadius: '4px',
+                                   border: '1px solid #e5e7eb',
+                                   textAlign: 'center'
+                                 }}
+                               >
+                                 <div style={{ fontWeight: 600, color: '#374151' }}>{writer}</div>
+                                 <div style={{ color: '#6b7280', fontSize: '11px' }}>{count} samples</div>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                       </div>
+                     )}
+
+
+                   </div>
+                 ) : (
+                   <div style={{ textAlign: 'center', padding: '20px', color: '#8c8c8c' }}>
+                     No analysis results available
+                   </div>
+                 )}
               </>
             )}
           </div>
