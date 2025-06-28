@@ -248,9 +248,17 @@ const TaskExecutor: React.FC = () => {
     try {
       setExecutingTaskId(taskId);
       await dispatch(executeTask(taskId)).unwrap();
-      message.success('Task execution completed!');
+      message.success('Task Execution Completed!');
+      
       // Refresh tasks to get updated status
-      dispatch(fetchTasks());
+      const updatedTasksResult = await dispatch(fetchTasks()).unwrap();
+      console.log('Grid refreshed after task execution:', updatedTasksResult);
+      
+      // Auto-open results modal for executed task when "Task Execution Completed!" is shown
+      console.log('Auto-opening results modal for executed task:', taskId);
+      setSelectedTaskKey(taskId);
+      setIsResultsModalOpen(true);
+      fetchPredictionResults(taskId);
     } catch (err) {
       // Error handled by useEffect
     } finally {
