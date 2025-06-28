@@ -6,7 +6,7 @@ export interface Task {
   description: string;
   datasetId: number;
   modelId: number;
-  status: 'created' | 'processing' | 'executed' | 'failed';
+  status: 0 | 1 | 2 | 3; // 0: Created, 1: Processing, 2: Completed, 3: Failed
   createdAt: string;
   updatedAt?: string;
   accuracy?: number;
@@ -39,7 +39,8 @@ export interface DatasetAnalysisResponse {
   datasetId: string;
   datasetName: string;
   status: string;
-  writers: Writer[];
+  writer_names: string[]; // The actual API response structure
+  writers: Writer[]; // Transformed data for UI
   analyzedAt: string;
 }
 
@@ -112,15 +113,31 @@ class TaskService {
       const response = await api.get(`/api/v1/Tasks/dataset/${datasetId}/analysis`);
       console.log('Dataset analysis response:', response.data);
       
-      // The API returns the expected structure directly
-      if (response.data && response.data.writers && Array.isArray(response.data.writers)) {
-        return response.data;
+      // Handle the actual API response structure with writer_names
+      if (response.data && response.data.writer_names && Array.isArray(response.data.writer_names)) {
+        // Transform writer_names into Writer objects for UI compatibility
+        const writers: Writer[] = response.data.writer_names.map((writerName: string, index: number) => ({
+          writerId: `writer_${index + 1}`, // Generate a simple ID
+          writerName: writerName,
+          sampleCount: 0, // Default value since not provided by API
+          confidence: 100, // Default value since not provided by API
+        }));
+
+        return {
+          datasetId: response.data.datasetId || datasetId,
+          datasetName: response.data.datasetName || 'Unknown Dataset',
+          status: response.data.status || 'Unknown',
+          writer_names: response.data.writer_names,
+          writers: writers,
+          analyzedAt: response.data.analyzedAt || new Date().toISOString(),
+        };
       } else {
         console.warn('Unexpected dataset analysis response structure:', response.data);
         return {
           datasetId,
           datasetName: 'Unknown Dataset',
           status: 'Unknown',
+          writer_names: [],
           writers: [],
           analyzedAt: new Date().toISOString(),
         };

@@ -87,33 +87,43 @@ const TaskExecutor: React.FC = () => {
     });
   }, [tasks, loading, error, total]);
 
-  const getStatusColor = (status: string) => {
+  // Debug logging for writers state changes
+  useEffect(() => {
+    console.log('Writers state changed:', {
+      writersCount: writers.length,
+      writers,
+      selectedDatasetId,
+      writersLoading
+    });
+  }, [writers, selectedDatasetId, writersLoading]);
+
+  const getStatusColor = (status: number) => {
     switch (status) {
-      case 'executed':
-        return 'success';
-      case 'failed':
-        return 'error';
-      case 'processing':
-        return 'processing';
-      case 'created':
+      case 0: // Created
         return 'default';
+      case 1: // Processing
+        return 'processing';
+      case 2: // Completed
+        return 'success';
+      case 3: // Failed
+        return 'error';
       default:
         return 'default';
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: number) => {
     switch (status) {
-      case 'executed':
-        return 'Executed';
-      case 'failed':
-        return 'Failed';
-      case 'processing':
-        return 'Processing';
-      case 'created':
+      case 0:
         return 'Created';
+      case 1:
+        return 'Processing';
+      case 2:
+        return 'Completed';
+      case 3:
+        return 'Failed';
       default:
-        return status;
+        return 'Unknown';
     }
   };
 
@@ -137,7 +147,7 @@ const TaskExecutor: React.FC = () => {
     ];
 
     // Add status-specific actions
-    if (selectedTask.status === 'executed') {
+    if (selectedTask.status === 2) { // Completed
       items.push({
         key: 'results',
         label: 'View Results',
@@ -151,7 +161,7 @@ const TaskExecutor: React.FC = () => {
         disabled: false,
         danger: true,
       });
-    } else if (selectedTask.status === 'failed') {
+    } else if (selectedTask.status === 3) { // Failed
       items.push({
         key: 'retry',
         label: 'Retry Task',
@@ -165,7 +175,7 @@ const TaskExecutor: React.FC = () => {
         disabled: false,
         danger: true,
       });
-    } else if (selectedTask.status === 'created') {
+    } else if (selectedTask.status === 0) { // Created
       items.push({
         key: 'execute',
         label: 'Execute Task',
@@ -222,8 +232,8 @@ const TaskExecutor: React.FC = () => {
   // Handle create task form submission
   const handleCreateTask = async () => {
     // Manual validation for writers selection
-    if (selectedWriters.length === 0) {
-      message.error('Please select at least one writer!');
+    if (selectedWriters.length < 5) {
+      message.error('Please select at least 5 writers!');
       return;
     }
 
@@ -242,21 +252,18 @@ const TaskExecutor: React.FC = () => {
       
       // Find the selected dataset name for better task description
       const selectedDataset = completedDatasets.find(d => d.id === values.dataset);
-      const selectedWriterNames = writers
-        .filter(w => selectedWriters.includes(w.writerId))
-        .map(w => w.writerName)
-        .join(', ');
+      const selectedWriterNames = selectedWriters as string[]; // selectedWriters now contains writer names
       
-      console.log('Selected writers:', selectedWriters);
+      console.log('Selected writers (names):', selectedWriters);
       console.log('Selected writer names:', selectedWriterNames);
       console.log('Available writers:', writers);
       console.log('Query image base64 length:', queryImageBase64.length);
       
       const taskData = {
         name: values.name || `Task for ${selectedDataset?.name || 'Selected Dataset'}`,
-        description: values.description || `Task created with writers: ${selectedWriterNames} for dataset: ${selectedDataset?.name || 'Unknown'}`,
+        description: values.description || `Task created with writers: ${selectedWriterNames.join(', ')} for dataset: ${selectedDataset?.name || 'Unknown'}`,
         datasetId: values.dataset, // Send as string (Guid)
-        selectedWriters: selectedWriters as string[], // Array of writer IDs
+        selectedWriters: selectedWriterNames, // Array of writer names (not IDs)
         useDefaultModel: true, // Always true since we only have default model
         queryImageBase64: queryImageBase64, // Base64 encoded image
       };
@@ -271,8 +278,21 @@ const TaskExecutor: React.FC = () => {
       setWriters([]);
       setQueryImageBase64('');
       setQueryImageFile(null);
+      // Refresh the tasks grid
+      dispatch(fetchTasks());
     } catch (errorInfo) {
-      console.log('Validation failed:', errorInfo);
+      console.log('Task creation failed:', errorInfo);
+      // Close modal and refresh grid even on failure
+      setIsCreateTaskModalOpen(false);
+      createTaskForm.resetFields();
+      setSelectedWriters([]);
+      setSelectedKeys([]);
+      setSelectedDatasetId(null);
+      setWriters([]);
+      setQueryImageBase64('');
+      setQueryImageFile(null);
+      // Refresh the tasks grid
+      dispatch(fetchTasks());
     }
   };
 
@@ -303,14 +323,22 @@ const TaskExecutor: React.FC = () => {
     try {
       setWritersLoading(true);
       setSelectedDatasetId(datasetId);
+      console.log('Fetching writers for dataset:', datasetId);
+      
       const analysisData = await taskService.getDatasetAnalysis(datasetId);
-      setWriters(analysisData.writers);
+      console.log('Dataset analysis response:', analysisData);
+      console.log('Writers from API:', analysisData.writers);
+      
+      setWriters(analysisData.writers || []);
       
       // Reset writer selection when dataset changes
       setSelectedWriters([]);
       setSelectedKeys([]);
+      
+      console.log('Writers state updated, length:', analysisData.writers?.length || 0);
     } catch (error: any) {
       console.error('Error fetching writers:', error);
+      console.error('Error details:', error.response?.data);
       message.error(error.response?.data?.message || 'Failed to fetch writers for dataset');
       setWriters([]);
     } finally {
@@ -327,11 +355,14 @@ const TaskExecutor: React.FC = () => {
 
   // Convert writers to transfer format
   const getWritersTransferData = (): WriterItem[] => {
-    return writers.map(writer => ({
-      key: writer.writerId,
+    console.log('getWritersTransferData called, writers state:', writers);
+    const transferData = writers.map(writer => ({
+      key: writer.writerName, // Use writer name as key since API expects writer names
       title: writer.writerName,
-      description: `Samples: ${writer.sampleCount} | Confidence: ${writer.confidence}%`,
+      description: writer.writerName,
     }));
+    console.log('Transfer data generated:', transferData);
+    return transferData;
   };
 
   // Convert image file to base64
@@ -397,8 +428,8 @@ const TaskExecutor: React.FC = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => (
-        <Tag color={getStatusColor(status)} className="status-tag">
+      render: (status: number) => (
+        <Tag color={getStatusColor(status)}>
           {getStatusText(status)}
         </Tag>
       ),
@@ -611,31 +642,46 @@ const TaskExecutor: React.FC = () => {
                 : 'No writers found for this dataset'
               }
             </div>
-            <Transfer
-              dataSource={getWritersTransferData()}
-              titles={['Available Writers', 'Selected Writers']}
-              targetKeys={selectedWriters}
-              selectedKeys={selectedKeys}
-              onChange={handleWritersChange}
-              onSelectChange={handleWritersSelectChange}
-              render={(item) => item.title}
-              listStyle={{
-                width: 300,
-                height: 300,
-              }}
-              className="transfer-small-buttons"
-              showSearch
-              filterOption={(search, item) =>
-                item.title.toLowerCase().includes(search.toLowerCase())
-              }
-              disabled={writersLoading || !selectedDatasetId}
-              locale={{
-                itemUnit: 'writer',
-                itemsUnit: 'writers',
-                searchPlaceholder: 'Search writers',
-                notFoundContent: writersLoading ? 'Loading writers...' : 'No writers found'
-              }}
-            />
+            {selectedDatasetId && !writersLoading && writers.length === 0 ? (
+              <div style={{
+                border: '1px dashed #d9d9d9',
+                borderRadius: '6px',
+                padding: '20px',
+                textAlign: 'center',
+                color: '#8c8c8c'
+              }}>
+                No writers found for this dataset
+              </div>
+            ) : (
+              <Transfer
+                dataSource={getWritersTransferData()}
+                titles={['Available Writers', 'Selected Writers']}
+                targetKeys={selectedWriters}
+                selectedKeys={selectedKeys}
+                onChange={handleWritersChange}
+                onSelectChange={handleWritersSelectChange}
+                render={(item) => (
+                  <div style={{ fontWeight: 'bold' }}>{item.title}</div>
+                )}
+                listStyle={{
+                  width: 300,
+                  height: 300,
+                }}
+                className="transfer-small-buttons"
+                showSearch
+                filterOption={(search, item) =>
+                  item.title.toLowerCase().includes(search.toLowerCase()) ||
+                  item.description.toLowerCase().includes(search.toLowerCase())
+                }
+                disabled={writersLoading || !selectedDatasetId || writers.length === 0}
+                locale={{
+                  itemUnit: 'writer',
+                  itemsUnit: 'writers',
+                  searchPlaceholder: 'Search writers',
+                  notFoundContent: writersLoading ? 'Loading writers...' : 'No writers available'
+                }}
+              />
+            )}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
