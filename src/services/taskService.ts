@@ -14,6 +14,7 @@ export interface Task {
   accuracy?: number;
   writerIdentified?: string;
   queryImageBase64?: string;
+  selectedWriters?: string[]; // List of selected writer names from API
 }
 
 export interface CreateTaskRequest {

@@ -355,13 +355,24 @@ const TaskExecutor: React.FC = () => {
       setCreatingTask(true);
 
       // Create task in background
-      await dispatch(createTask(taskData)).unwrap();
+      const createdTaskResponse = await dispatch(createTask(taskData)).unwrap();
+      console.log('Task created successfully:', createdTaskResponse);
       
-      // Show success message
+      // Show success message (same as retry)
       message.success('Task Execution Completed!');
       
-      // Refresh the tasks grid
-      dispatch(fetchTasks());
+      // Refresh the tasks grid to get latest task status
+      const updatedTasksResult = await dispatch(fetchTasks()).unwrap();
+      console.log('Grid refreshed after task creation:', updatedTasksResult);
+      
+      // Auto-open results modal for newly created task (should be the first task after refresh)
+      if (updatedTasksResult.tasks.length > 0) {
+        const newestTask = updatedTasksResult.tasks[0]; // First task should be the newest after refresh
+        console.log('Auto-opening results modal for newest task:', newestTask.id);
+        setSelectedTaskKey(newestTask.id);
+        setIsResultsModalOpen(true);
+        fetchPredictionResults(newestTask.id);
+      }
     } catch (errorInfo) {
       console.log('Task creation failed:', errorInfo);
       
@@ -883,14 +894,24 @@ const TaskExecutor: React.FC = () => {
             <Descriptions.Item label="Name" labelStyle={{ fontWeight: '500' }}>
               {detailedTask.name}
             </Descriptions.Item>
-            <Descriptions.Item label="Description" labelStyle={{ fontWeight: '500' }}>
-              {detailedTask.description}
-            </Descriptions.Item>
             <Descriptions.Item label="Dataset" labelStyle={{ fontWeight: '500' }}>
               {detailedTask.datasetName}
             </Descriptions.Item>
             <Descriptions.Item label="Model" labelStyle={{ fontWeight: '500' }}>
               {detailedTask.modelName}
+            </Descriptions.Item>
+            <Descriptions.Item label="Selected Writers" labelStyle={{ fontWeight: '500' }}>
+              {detailedTask.selectedWriters && detailedTask.selectedWriters.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {detailedTask.selectedWriters.map((writer, index) => (
+                    <Tag key={index} color="blue" style={{ margin: '2px' }}>
+                      {writer}
+                    </Tag>
+                  ))}
+                </div>
+              ) : (
+                <span style={{ color: '#8c8c8c', fontStyle: 'italic' }}>No writers selected</span>
+              )}
             </Descriptions.Item>
             <Descriptions.Item label="Status" labelStyle={{ fontWeight: '500' }}>
               <Tag color={getStatusColor(detailedTask.status)}>
@@ -993,6 +1014,19 @@ const TaskExecutor: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="Model" labelStyle={{ fontWeight: '500' }}>
               {selectedTask.modelName}
+            </Descriptions.Item>
+            <Descriptions.Item label="Selected Writers" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.selectedWriters && selectedTask.selectedWriters.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {selectedTask.selectedWriters.map((writer, index) => (
+                    <Tag key={index} color="blue" style={{ margin: '2px' }}>
+                      {writer}
+                    </Tag>
+                  ))}
+                </div>
+              ) : (
+                <span style={{ color: '#8c8c8c', fontStyle: 'italic' }}>No writers selected</span>
+              )}
             </Descriptions.Item>
             <Descriptions.Item label="Writer Identified" labelStyle={{ fontWeight: '500' }}>
               {(() => {
