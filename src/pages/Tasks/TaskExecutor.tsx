@@ -26,6 +26,16 @@ interface WriterItem {
   description: string;
 }
 
+interface PredictionResults {
+  task_id: string;
+  query_image: string;
+  query_image_base64: string;
+  prediction: {
+    writer_id: string;
+    confidence: number;
+  };
+}
+
 const TaskExecutor: React.FC = () => {
   const location = useLocation();
   const dispatch = useDispatch<AppDispatch>();
@@ -46,14 +56,25 @@ const TaskExecutor: React.FC = () => {
 
   // Task execution loading state
   const [executingTaskId, setExecutingTaskId] = useState<string | null>(null);
+  
+  // Task creation loading state
+  const [creatingTask, setCreatingTask] = useState(false);
 
   // Task details state
   const [detailedTask, setDetailedTask] = useState<Task | null>(null);
   const [loadingTaskDetails, setLoadingTaskDetails] = useState(false);
 
+  // Prediction results state
+  const [predictionResults, setPredictionResults] = useState<PredictionResults | null>(null);
+  const [loadingPredictionResults, setLoadingPredictionResults] = useState(false);
+
   // Query image state
   const [queryImageBase64, setQueryImageBase64] = useState<string>('');
   const [queryImageFile, setQueryImageFile] = useState<any>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Writers transfer data (legacy - will be replaced by real data)
   const [writersData] = useState<WriterItem[]>([]);
@@ -162,6 +183,12 @@ const TaskExecutor: React.FC = () => {
         disabled: false,
       });
       items.push({
+        key: 'retry',
+        label: executingTaskId === selectedTask.id ? 'Retrying...' : 'Retry Task',
+        icon: <ReloadOutlined spin={executingTaskId === selectedTask.id} />,
+        disabled: executingTaskId === selectedTask.id,
+      });
+      items.push({
         key: 'remove',
         label: 'Remove Task',
         icon: <DeleteOutlined />,
@@ -221,7 +248,7 @@ const TaskExecutor: React.FC = () => {
     try {
       setExecutingTaskId(taskId);
       await dispatch(executeTask(taskId)).unwrap();
-      message.success('Task execution started!');
+      message.success('Task execution completed!');
       // Refresh tasks to get updated status
       dispatch(fetchTasks());
     } catch (err) {
@@ -245,6 +272,23 @@ const TaskExecutor: React.FC = () => {
       setDetailedTask(null);
     } finally {
       setLoadingTaskDetails(false);
+    }
+  };
+
+  // Fetch prediction results for completed task
+  const fetchPredictionResults = async (taskId: string) => {
+    try {
+      setLoadingPredictionResults(true);
+      console.log('Fetching prediction results for:', taskId);
+      const results = await taskService.getPredictionResults(taskId);
+      console.log('Prediction results fetched:', results);
+      setPredictionResults(results);
+    } catch (error: any) {
+      console.error('Error fetching prediction results:', error);
+      message.error(error.response?.data?.message || 'Failed to fetch prediction results');
+      setPredictionResults(null);
+    } finally {
+      setLoadingPredictionResults(false);
     }
   };
 
@@ -297,8 +341,7 @@ const TaskExecutor: React.FC = () => {
         queryImageBase64: queryImageBase64, // Base64 encoded image
       };
 
-      await dispatch(createTask(taskData)).unwrap();
-      message.success('Task created successfully!');
+      // Close modal immediately
       setIsCreateTaskModalOpen(false);
       createTaskForm.resetFields();
       setSelectedWriters([]);
@@ -307,21 +350,28 @@ const TaskExecutor: React.FC = () => {
       setWriters([]);
       setQueryImageBase64('');
       setQueryImageFile(null);
+      
+      // Set creating task loading state
+      setCreatingTask(true);
+
+      // Create task in background
+      await dispatch(createTask(taskData)).unwrap();
+      
+      // Show success message
+      message.success('Task Execution Completed!');
+      
       // Refresh the tasks grid
       dispatch(fetchTasks());
     } catch (errorInfo) {
       console.log('Task creation failed:', errorInfo);
-      // Close modal and refresh grid even on failure
-      setIsCreateTaskModalOpen(false);
-      createTaskForm.resetFields();
-      setSelectedWriters([]);
-      setSelectedKeys([]);
-      setSelectedDatasetId(null);
-      setWriters([]);
-      setQueryImageBase64('');
-      setQueryImageFile(null);
-      // Refresh the tasks grid
+      
+      // Show error message
+      message.error('Task creation failed. Please try again.');
+      
+      // Refresh the tasks grid anyway to show current state
       dispatch(fetchTasks());
+    } finally {
+      setCreatingTask(false);
     }
   };
 
@@ -415,7 +465,6 @@ const TaskExecutor: React.FC = () => {
       const base64 = await convertToBase64(file);
       setQueryImageBase64(base64);
       setQueryImageFile(file);
-      message.success('Image uploaded successfully!');
     } catch (error) {
       message.error('Failed to process image. Please try again.');
       console.error('Image conversion error:', error);
@@ -513,7 +562,10 @@ const TaskExecutor: React.FC = () => {
         setIsRemoveConfirmOpen(true);
         break;
       case 'results':
-        setIsResultsModalOpen(true);
+        if (selectedTask) {
+          setIsResultsModalOpen(true);
+          fetchPredictionResults(selectedTask.id);
+        }
         break;
       case 'details':
         if (selectedTask) {
@@ -538,7 +590,7 @@ const TaskExecutor: React.FC = () => {
   }
 
   return (
-    <Spin spinning={executingTaskId !== null} tip="Processing task...">
+    <Spin spinning={executingTaskId !== null}>
       <div style={{ padding: '0' }}>
         {/* Header Section */}
         <div className="flex-row-between">
@@ -579,12 +631,22 @@ const TaskExecutor: React.FC = () => {
           dataSource={tasks}
           loading={loading}
           pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: total,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (totalItems, range) =>
               `${range[0]}-${range[1]} of ${totalItems} tasks`,
-            pageSize: 10,
-            total: total,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            onChange: (page, size) => {
+              setCurrentPage(page);
+              setPageSize(size || 10);
+            },
+            onShowSizeChange: (current, size) => {
+              setCurrentPage(1); // Reset to first page when changing page size
+              setPageSize(size);
+            },
           }}
           className="task-table"
           size="middle"
@@ -605,10 +667,12 @@ const TaskExecutor: React.FC = () => {
             key="execute" 
             type="primary" 
             onClick={handleCreateTask}
-            loading={loading}
+            loading={creatingTask}
+            disabled={creatingTask}
+            icon={creatingTask ? <ReloadOutlined spin /> : undefined}
             style={{ backgroundColor: '#4F46E5', borderColor: '#4F46E5' }}
           >
-            Execute
+            {creatingTask ? 'Creating...' : 'Execute'}
           </Button>
         ]}
         width={800}
@@ -895,15 +959,26 @@ const TaskExecutor: React.FC = () => {
           </div>
         }
         open={isResultsModalOpen}
-        onCancel={() => setIsResultsModalOpen(false)}
+        onCancel={() => {
+          setIsResultsModalOpen(false);
+          setPredictionResults(null);
+        }}
         footer={[
-          <Button key="close" onClick={() => setIsResultsModalOpen(false)}>
+          <Button key="close" onClick={() => {
+            setIsResultsModalOpen(false);
+            setPredictionResults(null);
+          }}>
             Close
           </Button>
         ]}
         width={700}
       >
-        {selectedTask && (
+        {loadingPredictionResults ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '16px', color: '#8c8c8c' }}>Loading prediction results...</div>
+          </div>
+        ) : selectedTask && (
           <Descriptions column={1} bordered size="middle">
             <Descriptions.Item label="Task ID" labelStyle={{ width: '150px', fontWeight: '500' }}>
               <code style={{ fontSize: '12px', backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '4px' }}>
@@ -913,9 +988,6 @@ const TaskExecutor: React.FC = () => {
             <Descriptions.Item label="Name" labelStyle={{ fontWeight: '500' }}>
               {selectedTask.name}
             </Descriptions.Item>
-            <Descriptions.Item label="Modified At" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.updatedAt ? new Date(selectedTask.updatedAt).toLocaleString() : 'N/A'}
-            </Descriptions.Item>
             <Descriptions.Item label="Dataset" labelStyle={{ fontWeight: '500' }}>
               {selectedTask.datasetName}
             </Descriptions.Item>
@@ -923,14 +995,50 @@ const TaskExecutor: React.FC = () => {
               {selectedTask.modelName}
             </Descriptions.Item>
             <Descriptions.Item label="Writer Identified" labelStyle={{ fontWeight: '500' }}>
-              <span style={{ color: '#4F46E5', fontWeight: '600' }}>
-                {selectedTask.writerIdentified || 'Writer #5 - Shakespeare Style'}
-              </span>
+              {(() => {
+                const writerId = predictionResults?.prediction?.writer_id || selectedTask.writerIdentified;
+                const isUnknown = writerId === 'unknown' || !writerId;
+                const displayText = writerId || 'N/A';
+                
+                return (
+                  <span style={{ 
+                    color: isUnknown ? '#EF4444' : '#4F46E5', 
+                    fontWeight: '600' 
+                  }}>
+                    {displayText}
+                  </span>
+                );
+              })()}
             </Descriptions.Item>
             <Descriptions.Item label="Accuracy" labelStyle={{ fontWeight: '500' }}>
-              <span style={{ color: '#10B981', fontWeight: '600' }}>
-                {selectedTask.accuracy ? `${selectedTask.accuracy}%` : '94.2%'}
-              </span>
+              {(() => {
+                const writerId = predictionResults?.prediction?.writer_id || selectedTask.writerIdentified;
+                const confidence = predictionResults?.prediction?.confidence;
+                const taskAccuracy = selectedTask.accuracy;
+                let displayText = 'N/A';
+                let isNA = true;
+                
+                // If writer is unknown, always show N/A in red
+                if (writerId === 'unknown') {
+                  displayText = 'N/A';
+                  isNA = true;
+                } else if (confidence !== undefined && confidence !== null) {
+                  displayText = `${(confidence * 100).toFixed(2)}%`;
+                  isNA = false;
+                } else if (taskAccuracy !== undefined && taskAccuracy !== null) {
+                  displayText = `${taskAccuracy}%`;
+                  isNA = false;
+                }
+                
+                return (
+                  <span style={{ 
+                    color: isNA ? '#EF4444' : '#10B981', 
+                    fontWeight: '600' 
+                  }}>
+                    {displayText}
+                  </span>
+                );
+              })()}
             </Descriptions.Item>
             <Descriptions.Item label="Query Image" labelStyle={{ fontWeight: '500' }}>
               <div style={{ 
@@ -940,9 +1048,9 @@ const TaskExecutor: React.FC = () => {
                 textAlign: 'center',
                 backgroundColor: '#fafafa'
               }}>
-                {selectedTask.queryImageBase64 ? (
+                {predictionResults?.query_image_base64 ? (
                   <img 
-                    src={`data:image/jpeg;base64,${selectedTask.queryImageBase64}`}
+                    src={`data:image/jpeg;base64,${predictionResults.query_image_base64}`}
                     alt="Query handwriting sample"
                     style={{ 
                       maxWidth: '250px', 
@@ -1011,8 +1119,6 @@ const TaskExecutor: React.FC = () => {
             }}>
               <div><strong>Task ID:</strong> <code style={{ fontSize: '12px' }}>{selectedTask.id}</code></div>
               <div><strong>Name:</strong> {selectedTask.name}</div>
-              <div><strong>Dataset:</strong> {selectedTask.datasetName}</div>
-              <div><strong>Model:</strong> {selectedTask.modelName}</div>
               <div><strong>Status:</strong> 
                 <Tag color={getStatusColor(selectedTask.status)} style={{ marginLeft: '8px' }}>
                   {getStatusText(selectedTask.status)}

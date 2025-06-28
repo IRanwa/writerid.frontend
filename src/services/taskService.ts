@@ -110,6 +110,18 @@ class TaskService {
     await api.delete(`/api/v1/Tasks/${id}`);
   }
 
+  // Get prediction results for completed task
+  async getPredictionResults(id: string): Promise<any> {
+    try {
+      const response = await api.get(`/api/v1/Tasks/${id}/prediction`);
+      console.log('Prediction results response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching prediction results:', error);
+      throw error;
+    }
+  }
+
   // Get dataset analysis (writers)
   async getDatasetAnalysis(datasetId: string): Promise<DatasetAnalysisResponse> {
     try {
