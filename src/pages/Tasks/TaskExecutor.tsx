@@ -44,6 +44,9 @@ const TaskExecutor: React.FC = () => {
   const [writersLoading, setWritersLoading] = useState(false);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
 
+  // Task execution loading state
+  const [executingTaskId, setExecutingTaskId] = useState<string | null>(null);
+
   // Query image state
   const [queryImageBase64, setQueryImageBase64] = useState<string>('');
   const [queryImageFile, setQueryImageFile] = useState<any>(null);
@@ -164,9 +167,9 @@ const TaskExecutor: React.FC = () => {
     } else if (selectedTask.status === 3) { // Failed
       items.push({
         key: 'retry',
-        label: 'Retry Task',
-        icon: <ReloadOutlined />,
-        disabled: false,
+        label: executingTaskId === selectedTask.id ? 'Retrying...' : 'Retry Task',
+        icon: <ReloadOutlined spin={executingTaskId === selectedTask.id} />,
+        disabled: executingTaskId === selectedTask.id,
       });
       items.push({
         key: 'remove',
@@ -178,9 +181,9 @@ const TaskExecutor: React.FC = () => {
     } else if (selectedTask.status === 0) { // Created
       items.push({
         key: 'execute',
-        label: 'Execute Task',
-        icon: <ReloadOutlined />,
-        disabled: executing,
+        label: executingTaskId === selectedTask.id ? 'Executing...' : 'Execute Task',
+        icon: <ReloadOutlined spin={executingTaskId === selectedTask.id} />,
+        disabled: executingTaskId === selectedTask.id,
       });
       items.push({
         key: 'remove',
@@ -212,10 +215,15 @@ const TaskExecutor: React.FC = () => {
   // Handle execute task
   const handleExecuteTask = async (taskId: string) => {
     try {
+      setExecutingTaskId(taskId);
       await dispatch(executeTask(taskId)).unwrap();
       message.success('Task execution started!');
+      // Refresh tasks to get updated status
+      dispatch(fetchTasks());
     } catch (err) {
       // Error handled by useEffect
+    } finally {
+      setExecutingTaskId(null);
     }
   };
 
@@ -484,37 +492,39 @@ const TaskExecutor: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '0' }}>
-      {/* Header Section */}
-      <div className="flex-row-between">
-        <h1 className="page-title">Task Executor</h1>
-        <div className="header-actions">
-          <Dropdown
-            menu={{
-              items: getActionItems(),
-              onClick: handleActionClick,
-            }}
-            placement="bottomRight"
-            disabled={!selectedTaskKey}
-          >
-            <Button disabled={executing}>
-              <Space>
-                Actions
-                <MoreOutlined />
-              </Space>
+    <Spin spinning={executingTaskId !== null} tip="Processing task...">
+      <div style={{ padding: '0' }}>
+        {/* Header Section */}
+        <div className="flex-row-between">
+          <h1 className="page-title">Task Executor</h1>
+          <div className="header-actions">
+            <Dropdown
+              menu={{
+                items: getActionItems(),
+                onClick: handleActionClick,
+              }}
+              placement="bottomRight"
+              disabled={!selectedTaskKey || executingTaskId !== null}
+            >
+              <Button disabled={executing || executingTaskId !== null}>
+                <Space>
+                  Actions
+                  <MoreOutlined />
+                </Space>
+              </Button>
+            </Dropdown>
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />}
+              className="create-task-button"
+              onClick={handleOpenCreateTaskModal}
+              loading={loading}
+              disabled={executingTaskId !== null}
+            >
+              Create Task
             </Button>
-          </Dropdown>
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />}
-            className="create-task-button"
-            onClick={handleOpenCreateTaskModal}
-            loading={loading}
-          >
-            Create Task
-          </Button>
+          </div>
         </div>
-      </div>
 
       {/* Task Table */}
       <div className="task-table-container">
@@ -925,7 +935,8 @@ const TaskExecutor: React.FC = () => {
           </div>
         )}
       </Modal>
-    </div>
+      </div>
+    </Spin>
   );
 };
 

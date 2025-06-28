@@ -123,7 +123,7 @@ const tasksSlice = createSlice({
         state.executing = false;
         const taskIndex = state.tasks.findIndex(task => task.id === action.payload);
         if (taskIndex !== -1) {
-          state.tasks[taskIndex].status = 'processing';
+          state.tasks[taskIndex].status = 1; // Set status to Processing (1)
         }
       })
       .addCase(executeTask.rejected, (state, action) => {
