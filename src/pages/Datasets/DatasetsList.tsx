@@ -870,7 +870,6 @@ const DatasetsList: React.FC = () => {
                 fontSize: '12px',
                 lineHeight: '1.6'
               }}>
-                📁 dataset/<br />
                 &nbsp;&nbsp;&nbsp;&nbsp;📁 writer_001/<br />
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 sample_001.png<br />
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📄 sample_002.png<br />

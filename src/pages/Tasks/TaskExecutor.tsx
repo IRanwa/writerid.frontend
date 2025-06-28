@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Tag, Dropdown, Space, Radio, Modal, Descriptions, Alert, Select, Transfer, Upload, Form, message } from 'antd';
+import { Button, Table, Tag, Dropdown, Space, Radio, Modal, Descriptions, Alert, Select, Transfer, Upload, Form, message, Spin, Input } from 'antd';
 import { useLocation } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import { 
   PlusOutlined, 
   MoreOutlined,
@@ -13,15 +14,11 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Key } from 'antd/es/table/interface';
-
-interface TaskData {
-  key: string;
-  taskId: string;
-  dataset: string;
-  model: string;
-  status: 'executed' | 'failed' | 'processing';
-  createdAt: string;
-}
+import { RootState, AppDispatch } from '../../store/store';
+import { fetchTasks, createTask, executeTask, deleteTask, setCurrentTask, clearError } from '../../store/slices/tasksSlice';
+import { fetchDatasets } from '../../store/slices/datasetsSlice';
+import { Task, Writer } from '../../services/taskService';
+import taskService from '../../services/taskService';
 
 interface WriterItem {
   key: string;
@@ -31,6 +28,10 @@ interface WriterItem {
 
 const TaskExecutor: React.FC = () => {
   const location = useLocation();
+  const dispatch = useDispatch<AppDispatch>();
+  const { tasks, loading, error, executing, total } = useSelector((state: RootState) => state.tasks);
+  const { datasets } = useSelector((state: RootState) => state.datasets);
+  
   const [selectedTaskKey, setSelectedTaskKey] = useState<React.Key | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
@@ -38,62 +39,53 @@ const TaskExecutor: React.FC = () => {
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [createTaskForm] = Form.useForm();
 
-  // Writers transfer data
-  const [writersData] = useState<WriterItem[]>([
-    { key: '1', title: 'Writer 1', description: 'Historical samples writer 1' },
-    { key: '2', title: 'Writer 2', description: 'Historical samples writer 2' },
-    { key: '3', title: 'Writer 3', description: 'Historical samples writer 3' },
-    { key: '4', title: 'Writer 4', description: 'Historical samples writer 4' },
-    { key: '5', title: 'Writer 5', description: 'Historical samples writer 5' },
-    { key: '6', title: 'Writer 6', description: 'Historical samples writer 6' },
-    { key: '7', title: 'Writer 7', description: 'Historical samples writer 7' },
-    { key: '8', title: 'Writer 8', description: 'Historical samples writer 8' },
-  ]);
+  // Writers data state
+  const [writers, setWriters] = useState<Writer[]>([]);
+  const [writersLoading, setWritersLoading] = useState(false);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
+
+  // Query image state
+  const [queryImageBase64, setQueryImageBase64] = useState<string>('');
+  const [queryImageFile, setQueryImageFile] = useState<any>(null);
+
+  // Writers transfer data (legacy - will be replaced by real data)
+  const [writersData] = useState<WriterItem[]>([]);
   const [selectedWriters, setSelectedWriters] = useState<Key[]>(['6']);
   const [selectedKeys, setSelectedKeys] = useState<Key[]>([]);
+
+  // Fetch tasks on component mount
+  useEffect(() => {
+    console.log('TaskExecutor: Dispatching fetchTasks...');
+    dispatch(fetchTasks());
+  }, [dispatch]);
 
   // Auto-open modal when navigated from Dashboard
   useEffect(() => {
     if (location.state?.openCreateModal) {
       setIsCreateTaskModalOpen(true);
+      // Fetch datasets when modal opens from navigation
+      dispatch(fetchDatasets());
     }
-  }, [location]);
+  }, [location, dispatch]);
 
-  // Mock data for tasks
-  const taskData: TaskData[] = [
-    {
-      key: '1',
-      taskId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      dataset: 'Historical Dataset',
-      model: 'Default',
-      status: 'executed',
-      createdAt: '2024-01-15 10:30:00'
-    },
-    {
-      key: '2', 
-      taskId: 'b2847391-2675-5753-9747-2eee9ef9c1e2',
-      dataset: 'Historical Dataset',
-      model: 'Custom Model 1',
-      status: 'failed',
-      createdAt: '2024-01-15 11:15:00'
-    },
-    {
-      key: '3',
-      taskId: 'c3958462-3786-6864-a858-3fff0f0a0d2f3',
-      dataset: 'Historical Dataset', 
-      model: 'Custom Model 1',
-      status: 'processing',
-      createdAt: '2024-01-15 12:00:00'
-    },
-    {
-      key: '4',
-      taskId: 'd4069573-4897-7975-b969-4000101b1e4g4',
-      dataset: 'Historical Dataset',
-      model: 'Custom Model 1', 
-      status: 'processing',
-      createdAt: '2024-01-15 12:30:00'
+  // Show error messages
+  useEffect(() => {
+    if (error) {
+      message.error(error);
+      dispatch(clearError());
     }
-  ];
+  }, [error, dispatch]);
+
+  // Debug logging for Redux state changes
+  useEffect(() => {
+    console.log('TaskExecutor Redux state updated:', {
+      tasksCount: tasks.length,
+      tasks,
+      loading,
+      error,
+      total
+    });
+  }, [tasks, loading, error, total]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -103,6 +95,8 @@ const TaskExecutor: React.FC = () => {
         return 'error';
       case 'processing':
         return 'processing';
+      case 'created':
+        return 'default';
       default:
         return 'default';
     }
@@ -116,14 +110,16 @@ const TaskExecutor: React.FC = () => {
         return 'Failed';
       case 'processing':
         return 'Processing';
+      case 'created':
+        return 'Created';
       default:
         return status;
     }
   };
 
   // Get selected task data
-  const getSelectedTask = () => {
-    return taskData.find(task => task.key === selectedTaskKey);
+  const getSelectedTask = (): Task | undefined => {
+    return tasks.find(task => task.id === selectedTaskKey);
   };
 
   // Generate dynamic action items based on selected task status
@@ -136,7 +132,7 @@ const TaskExecutor: React.FC = () => {
         key: 'details',
         label: 'View Details',
         icon: <InfoCircleOutlined />,
-        disabled: false, // Enable view details to show modal
+        disabled: false,
       }
     ];
 
@@ -169,21 +165,47 @@ const TaskExecutor: React.FC = () => {
         disabled: false,
         danger: true,
       });
+    } else if (selectedTask.status === 'created') {
+      items.push({
+        key: 'execute',
+        label: 'Execute Task',
+        icon: <ReloadOutlined />,
+        disabled: executing,
+      });
+      items.push({
+        key: 'remove',
+        label: 'Remove Task',
+        icon: <DeleteOutlined />,
+        disabled: false,
+        danger: true,
+      });
     }
 
     return items;
   };
 
   // Handle remove task confirmation
-  const handleRemoveTask = () => {
+  const handleRemoveTask = async () => {
     const selectedTask = getSelectedTask();
     if (selectedTask) {
-      console.log('Task removed:', selectedTask.taskId);
-      // Here you would typically make an API call to remove the task
-      // For now, we'll just close the modal and clear selection
-      setIsRemoveConfirmOpen(false);
-      setSelectedTaskKey(null);
-      // You could also update the taskData state to remove the task from the UI
+      try {
+        await dispatch(deleteTask(selectedTask.id)).unwrap();
+        message.success('Task removed successfully!');
+        setIsRemoveConfirmOpen(false);
+        setSelectedTaskKey(null);
+      } catch (err) {
+        // Error handled by useEffect
+      }
+    }
+  };
+
+  // Handle execute task
+  const handleExecuteTask = async (taskId: string) => {
+    try {
+      await dispatch(executeTask(taskId)).unwrap();
+      message.success('Task execution started!');
+    } catch (err) {
+      // Error handled by useEffect
     }
   };
 
@@ -198,71 +220,177 @@ const TaskExecutor: React.FC = () => {
   };
 
   // Handle create task form submission
-  const handleCreateTask = () => {
+  const handleCreateTask = async () => {
     // Manual validation for writers selection
     if (selectedWriters.length === 0) {
       message.error('Please select at least one writer!');
       return;
     }
 
-    createTaskForm.validateFields().then((values) => {
-      console.log('Creating task with values:', values);
+    if (!selectedDatasetId) {
+      message.error('Please select a dataset first!');
+      return;
+    }
+
+    if (!queryImageBase64) {
+      message.error('Please upload a query image!');
+      return;
+    }
+
+    try {
+      const values = await createTaskForm.validateFields();
+      
+      // Find the selected dataset name for better task description
+      const selectedDataset = completedDatasets.find(d => d.id === values.dataset);
+      const selectedWriterNames = writers
+        .filter(w => selectedWriters.includes(w.writerId))
+        .map(w => w.writerName)
+        .join(', ');
+      
       console.log('Selected writers:', selectedWriters);
+      console.log('Selected writer names:', selectedWriterNames);
+      console.log('Available writers:', writers);
+      console.log('Query image base64 length:', queryImageBase64.length);
+      
+      const taskData = {
+        name: values.name || `Task for ${selectedDataset?.name || 'Selected Dataset'}`,
+        description: values.description || `Task created with writers: ${selectedWriterNames} for dataset: ${selectedDataset?.name || 'Unknown'}`,
+        datasetId: values.dataset, // Send as string (Guid)
+        selectedWriters: selectedWriters as string[], // Array of writer IDs
+        useDefaultModel: true, // Always true since we only have default model
+        queryImageBase64: queryImageBase64, // Base64 encoded image
+      };
+
+      await dispatch(createTask(taskData)).unwrap();
       message.success('Task created successfully!');
       setIsCreateTaskModalOpen(false);
       createTaskForm.resetFields();
-      setSelectedWriters(['6']); // Reset to default selection
-      setSelectedKeys([]); // Reset selected keys
-    }).catch((errorInfo) => {
+      setSelectedWriters([]);
+      setSelectedKeys([]);
+      setSelectedDatasetId(null);
+      setWriters([]);
+      setQueryImageBase64('');
+      setQueryImageFile(null);
+    } catch (errorInfo) {
       console.log('Validation failed:', errorInfo);
-    });
+    }
   };
 
   // Handle create task modal close
   const handleCreateTaskModalClose = () => {
     setIsCreateTaskModalOpen(false);
     createTaskForm.resetFields();
-    setSelectedWriters(['6']); // Reset to default selection
-    setSelectedKeys([]); // Reset selected keys
+    setSelectedWriters([]);
+    setSelectedKeys([]);
+    setSelectedDatasetId(null);
+    setWriters([]);
+    setQueryImageBase64('');
+    setQueryImageFile(null);
   };
 
-  const columns: ColumnsType<TaskData> = [
+  // Handle opening create task modal and fetch datasets
+  const handleOpenCreateTaskModal = () => {
+    setIsCreateTaskModalOpen(true);
+    // Fetch datasets when modal opens
+    dispatch(fetchDatasets());
+  };
+
+  // Get completed datasets only (status = 2)
+  const completedDatasets = datasets.filter(dataset => dataset.status === 2);
+
+  // Fetch writers for selected dataset
+  const fetchWritersForDataset = async (datasetId: string) => {
+    try {
+      setWritersLoading(true);
+      setSelectedDatasetId(datasetId);
+      const analysisData = await taskService.getDatasetAnalysis(datasetId);
+      setWriters(analysisData.writers);
+      
+      // Reset writer selection when dataset changes
+      setSelectedWriters([]);
+      setSelectedKeys([]);
+    } catch (error: any) {
+      console.error('Error fetching writers:', error);
+      message.error(error.response?.data?.message || 'Failed to fetch writers for dataset');
+      setWriters([]);
+    } finally {
+      setWritersLoading(false);
+    }
+  };
+
+  // Handle dataset selection change
+  const handleDatasetChange = (datasetId: string) => {
+    if (datasetId && datasetId !== selectedDatasetId) {
+      fetchWritersForDataset(datasetId);
+    }
+  };
+
+  // Convert writers to transfer format
+  const getWritersTransferData = (): WriterItem[] => {
+    return writers.map(writer => ({
+      key: writer.writerId,
+      title: writer.writerName,
+      description: `Samples: ${writer.sampleCount} | Confidence: ${writer.confidence}%`,
+    }));
+  };
+
+  // Convert image file to base64
+  const convertToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data:image/jpeg;base64, prefix to get just the base64 string
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // Handle image upload
+  const handleImageUpload = async (file: File) => {
+    try {
+      const base64 = await convertToBase64(file);
+      setQueryImageBase64(base64);
+      setQueryImageFile(file);
+      message.success('Image uploaded successfully!');
+    } catch (error) {
+      message.error('Failed to process image. Please try again.');
+      console.error('Image conversion error:', error);
+    }
+  };
+
+  const columns: ColumnsType<Task> = [
     {
       title: '',
       dataIndex: 'select',
       width: 50,
       render: (_, record) => (
         <Radio
-          checked={selectedTaskKey === record.key}
+          checked={selectedTaskKey === record.id}
           onChange={() => {
-            setSelectedTaskKey(record.key);
+            setSelectedTaskKey(record.id);
           }}
         />
       ),
     },
     {
       title: 'Task ID',
-      dataIndex: 'taskId',
-      key: 'taskId',
+      dataIndex: 'id',
+      key: 'id',
       width: 300,
       render: (text) => (
         <span className="task-id">{text}</span>
       ),
     },
     {
-      title: 'Dataset',
-      dataIndex: 'dataset',
-      key: 'dataset',
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
       render: (text) => (
         <span className="dataset-name">{text}</span>
-      ),
-    },
-    {
-      title: 'Model',
-      dataIndex: 'model',
-      key: 'model',
-      render: (text) => (
-        <span className="model-name">{text}</span>
       ),
     },
     {
@@ -275,6 +403,12 @@ const TaskExecutor: React.FC = () => {
         </Tag>
       ),
     },
+    {
+      title: 'Created At',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (text) => new Date(text).toLocaleString(),
+    },
   ];
 
   const handleActionClick = ({ key }: { key: string }) => {
@@ -283,8 +417,15 @@ const TaskExecutor: React.FC = () => {
     
     // Handle different actions
     switch (key) {
+      case 'execute':
+        if (selectedTask) {
+          handleExecuteTask(selectedTask.id);
+        }
+        break;
       case 'retry':
-        console.log('Retrying task:', selectedTask?.taskId);
+        if (selectedTask) {
+          handleExecuteTask(selectedTask.id);
+        }
         break;
       case 'remove':
         setIsRemoveConfirmOpen(true);
@@ -302,6 +443,15 @@ const TaskExecutor: React.FC = () => {
 
   const selectedTask = getSelectedTask();
 
+  if (loading && tasks.length === 0) {
+    return (
+      <div style={{ padding: '50px', textAlign: 'center' }}>
+        <Spin size="large" />
+        <div style={{ marginTop: '16px' }}>Loading tasks...</div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '0' }}>
       {/* Header Section */}
@@ -316,7 +466,7 @@ const TaskExecutor: React.FC = () => {
             placement="bottomRight"
             disabled={!selectedTaskKey}
           >
-            <Button>
+            <Button disabled={executing}>
               <Space>
                 Actions
                 <MoreOutlined />
@@ -327,7 +477,8 @@ const TaskExecutor: React.FC = () => {
             type="primary" 
             icon={<PlusOutlined />}
             className="create-task-button"
-            onClick={() => setIsCreateTaskModalOpen(true)}
+            onClick={handleOpenCreateTaskModal}
+            loading={loading}
           >
             Create Task
           </Button>
@@ -338,16 +489,19 @@ const TaskExecutor: React.FC = () => {
       <div className="task-table-container">
         <Table
           columns={columns}
-          dataSource={taskData}
+          dataSource={tasks}
+          loading={loading}
           pagination={{
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} of ${total} tasks`,
+            showTotal: (totalItems, range) =>
+              `${range[0]}-${range[1]} of ${totalItems} tasks`,
             pageSize: 10,
+            total: total,
           }}
           className="task-table"
           size="middle"
+          rowKey="id"
         />
       </div>
 
@@ -364,6 +518,7 @@ const TaskExecutor: React.FC = () => {
             key="execute" 
             type="primary" 
             onClick={handleCreateTask}
+            loading={loading}
             style={{ backgroundColor: '#4F46E5', borderColor: '#4F46E5' }}
           >
             Execute
@@ -385,53 +540,55 @@ const TaskExecutor: React.FC = () => {
               color: '#000000d9',
               fontSize: '14px'
             }}>
-<span style={{ color: '#ff4d4f' }}>*</span> Dataset
+              <span style={{ color: '#ff4d4f' }}>*</span> Task Name
             </label>
+            <Form.Item
+              name="name"
+              rules={[{ required: true, message: 'Please enter a task name!' }]}
+              style={{ marginBottom: 0 }}
+            >
+              <Input 
+                placeholder="Enter task name" 
+                size="large"
+                maxLength={100}
+              />
+            </Form.Item>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '8px', 
+              fontWeight: '600',
+              color: '#000000d9',
+              fontSize: '14px'
+            }}>
+              <span style={{ color: '#ff4d4f' }}>*</span> Dataset
+            </label>
+            <div style={{ marginBottom: '8px', color: '#666', fontSize: '12px' }}>
+              Only completed datasets are available for task creation
+            </div>
             <Form.Item
               name="dataset"
               rules={[{ required: true, message: 'Please select a dataset!' }]}
               style={{ marginBottom: 0 }}
             >
-              <Select placeholder="Dataset" size="large">
-                <Select.Option value="historical-dataset">Historical Dataset</Select.Option>
-                <Select.Option value="modern-dataset">Modern Dataset</Select.Option>
-                <Select.Option value="custom-dataset">Custom Dataset</Select.Option>
+              <Select 
+                placeholder={completedDatasets.length > 0 ? "Select a dataset" : "No completed datasets available"} 
+                size="large"
+                disabled={completedDatasets.length === 0}
+                notFoundContent={completedDatasets.length === 0 ? "No completed datasets found" : "No datasets found"}
+                onChange={handleDatasetChange}
+                allowClear
+              >
+                {completedDatasets.map(dataset => (
+                  <Select.Option key={dataset.id} value={dataset.id}>
+                    {dataset.name}
+                  </Select.Option>
+                ))}
               </Select>
             </Form.Item>
           </div>
-
-                     <div style={{ marginBottom: '24px' }}>
-             <label style={{ 
-               display: 'block', 
-               marginBottom: '8px', 
-               fontWeight: '600',
-               color: '#000000d9',
-               fontSize: '14px'
-             }}>
-<span style={{ color: '#ff4d4f' }}>*</span> Writers Selection
-             </label>
-             <div style={{ marginBottom: '8px', color: '#666', fontSize: '14px' }}>
-               Select writers from the available list:
-             </div>
-             <Transfer
-               dataSource={writersData}
-               titles={['Available Writers', 'Selected Writers']}
-               targetKeys={selectedWriters}
-               selectedKeys={selectedKeys}
-               onChange={handleWritersChange}
-               onSelectChange={handleWritersSelectChange}
-               render={(item) => item.title}
-               listStyle={{
-                 width: 300,
-                 height: 300,
-               }}
-               className="transfer-small-buttons"
-               showSearch
-               filterOption={(search, item) =>
-                 item.title.toLowerCase().includes(search.toLowerCase())
-               }
-             />
-           </div>
 
           <div style={{ marginBottom: '24px' }}>
             <label style={{ 
@@ -441,20 +598,44 @@ const TaskExecutor: React.FC = () => {
               color: '#000000d9',
               fontSize: '14px'
             }}>
-<span style={{ color: '#ff4d4f' }}>*</span> Model
+              <span style={{ color: '#ff4d4f' }}>*</span> Writers Selection
+              {writersLoading && <Spin size="small" style={{ marginLeft: '8px' }} />}
             </label>
-            <Form.Item
-              name="model"
-              rules={[{ required: true, message: 'Please select a model!' }]}
-              style={{ marginBottom: 0 }}
-            >
-              <Select placeholder="Model" size="large">
-                <Select.Option value="default">Default</Select.Option>
-                <Select.Option value="custom-model-1">Custom Model 1</Select.Option>
-                <Select.Option value="custom-model-2">Custom Model 2</Select.Option>
-                <Select.Option value="cnn-classifier">CNN Writer Classifier</Select.Option>
-              </Select>
-            </Form.Item>
+            <div style={{ marginBottom: '8px', color: '#666', fontSize: '14px' }}>
+              {!selectedDatasetId 
+                ? 'Please select a dataset first to load available writers'
+                : writersLoading 
+                ? 'Loading writers for selected dataset...'
+                : writers.length > 0
+                ? `Select writers from the available list (${writers.length} writers found):`
+                : 'No writers found for this dataset'
+              }
+            </div>
+            <Transfer
+              dataSource={getWritersTransferData()}
+              titles={['Available Writers', 'Selected Writers']}
+              targetKeys={selectedWriters}
+              selectedKeys={selectedKeys}
+              onChange={handleWritersChange}
+              onSelectChange={handleWritersSelectChange}
+              render={(item) => item.title}
+              listStyle={{
+                width: 300,
+                height: 300,
+              }}
+              className="transfer-small-buttons"
+              showSearch
+              filterOption={(search, item) =>
+                item.title.toLowerCase().includes(search.toLowerCase())
+              }
+              disabled={writersLoading || !selectedDatasetId}
+              locale={{
+                itemUnit: 'writer',
+                itemsUnit: 'writers',
+                searchPlaceholder: 'Search writers',
+                notFoundContent: writersLoading ? 'Loading writers...' : 'No writers found'
+              }}
+            />
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -465,7 +646,7 @@ const TaskExecutor: React.FC = () => {
               color: '#000000d9',
               fontSize: '14px'
             }}>
-<span style={{ color: '#ff4d4f' }}>*</span> Query Image
+              <span style={{ color: '#ff4d4f' }}>*</span> Query Image
             </label>
             <Form.Item
               name="queryImage"
@@ -475,8 +656,15 @@ const TaskExecutor: React.FC = () => {
               <Upload
                 listType="picture"
                 maxCount={1}
-                beforeUpload={() => false} // Prevent auto upload
+                beforeUpload={(file) => {
+                  handleImageUpload(file);
+                  return false; // Prevent auto upload
+                }}
                 accept="image/*"
+                onRemove={() => {
+                  setQueryImageBase64('');
+                  setQueryImageFile(null);
+                }}
               >
                 <Button 
                   icon={<UploadOutlined />} 
@@ -512,14 +700,20 @@ const TaskExecutor: React.FC = () => {
           <Descriptions column={1} bordered size="middle">
             <Descriptions.Item label="Task ID" labelStyle={{ width: '150px', fontWeight: '500' }}>
               <code style={{ fontSize: '12px', backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '4px' }}>
-                {selectedTask.taskId}
+                {selectedTask.id}
               </code>
             </Descriptions.Item>
-            <Descriptions.Item label="Dataset" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.dataset}
+            <Descriptions.Item label="Name" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.name}
             </Descriptions.Item>
-            <Descriptions.Item label="Model" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.model}
+            <Descriptions.Item label="Description" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.description}
+            </Descriptions.Item>
+            <Descriptions.Item label="Dataset ID" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.datasetId}
+            </Descriptions.Item>
+            <Descriptions.Item label="Model ID" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.modelId}
             </Descriptions.Item>
             <Descriptions.Item label="Status" labelStyle={{ fontWeight: '500' }}>
               <Tag color={getStatusColor(selectedTask.status)}>
@@ -527,7 +721,7 @@ const TaskExecutor: React.FC = () => {
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Created At" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.createdAt}
+              {new Date(selectedTask.createdAt).toLocaleString()}
             </Descriptions.Item>
             <Descriptions.Item label="Query Image" labelStyle={{ fontWeight: '500' }}>
               <div style={{ 
@@ -537,17 +731,17 @@ const TaskExecutor: React.FC = () => {
                 textAlign: 'center',
                 backgroundColor: '#fafafa'
               }}>
-                                 <img 
-                   src="https://via.placeholder.com/250x150/ffffff/333333?text=Sample+Handwriting+Text" 
-                   alt="Query handwriting sample"
-                   style={{ 
-                     maxWidth: '250px', 
-                     maxHeight: '150px', 
-                     borderRadius: '4px',
-                     border: '2px solid #e0e0e0',
-                     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                   }}
-                 />
+                <img 
+                  src="https://via.placeholder.com/250x150/ffffff/333333?text=Sample+Handwriting+Text" 
+                  alt="Query handwriting sample"
+                  style={{ 
+                    maxWidth: '250px', 
+                    maxHeight: '150px', 
+                    borderRadius: '4px',
+                    border: '2px solid #e0e0e0',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  }}
+                />
                 <div style={{ 
                   marginTop: '8px', 
                   fontSize: '12px', 
@@ -583,20 +777,27 @@ const TaskExecutor: React.FC = () => {
           <Descriptions column={1} bordered size="middle">
             <Descriptions.Item label="Task ID" labelStyle={{ width: '150px', fontWeight: '500' }}>
               <code style={{ fontSize: '12px', backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '4px' }}>
-                {selectedTask.taskId}
+                {selectedTask.id}
               </code>
             </Descriptions.Item>
-            <Descriptions.Item label="Dataset" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.dataset}
+            <Descriptions.Item label="Name" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.name}
             </Descriptions.Item>
-            <Descriptions.Item label="Model" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.model}
+            <Descriptions.Item label="Dataset ID" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.datasetId}
+            </Descriptions.Item>
+            <Descriptions.Item label="Model ID" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.modelId}
             </Descriptions.Item>
             <Descriptions.Item label="Writer Identified" labelStyle={{ fontWeight: '500' }}>
-              <span style={{ color: '#4F46E5', fontWeight: '600' }}>Writer #5 - Shakespeare Style</span>
+              <span style={{ color: '#4F46E5', fontWeight: '600' }}>
+                {selectedTask.writerIdentified || 'Writer #5 - Shakespeare Style'}
+              </span>
             </Descriptions.Item>
             <Descriptions.Item label="Accuracy" labelStyle={{ fontWeight: '500' }}>
-              <span style={{ color: '#10B981', fontWeight: '600' }}>94.2%</span>
+              <span style={{ color: '#10B981', fontWeight: '600' }}>
+                {selectedTask.accuracy ? `${selectedTask.accuracy}%` : '94.2%'}
+              </span>
             </Descriptions.Item>
             <Descriptions.Item label="Query Image" labelStyle={{ fontWeight: '500' }}>
               <div style={{ 
@@ -644,7 +845,7 @@ const TaskExecutor: React.FC = () => {
         onOk={handleRemoveTask}
         okText="Remove Task"
         cancelText="Cancel"
-        okButtonProps={{ danger: true }}
+        okButtonProps={{ danger: true, loading: loading }}
         width={500}
       >
         {selectedTask && (
@@ -665,9 +866,10 @@ const TaskExecutor: React.FC = () => {
               marginTop: '12px',
               border: '1px solid #e5e7eb' 
             }}>
-              <div><strong>Task ID:</strong> <code style={{ fontSize: '12px' }}>{selectedTask.taskId}</code></div>
-              <div><strong>Dataset:</strong> {selectedTask.dataset}</div>
-              <div><strong>Model:</strong> {selectedTask.model}</div>
+              <div><strong>Task ID:</strong> <code style={{ fontSize: '12px' }}>{selectedTask.id}</code></div>
+              <div><strong>Name:</strong> {selectedTask.name}</div>
+              <div><strong>Dataset ID:</strong> {selectedTask.datasetId}</div>
+              <div><strong>Model ID:</strong> {selectedTask.modelId}</div>
               <div><strong>Status:</strong> 
                 <Tag color={getStatusColor(selectedTask.status)} style={{ marginLeft: '8px' }}>
                   {getStatusText(selectedTask.status)}
