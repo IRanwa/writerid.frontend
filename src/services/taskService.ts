@@ -6,11 +6,14 @@ export interface Task {
   description: string;
   datasetId: number;
   modelId: number;
+  modelName: string;
+  datasetName: string;
   status: 0 | 1 | 2 | 3; // 0: Created, 1: Processing, 2: Completed, 3: Failed
   createdAt: string;
   updatedAt?: string;
   accuracy?: number;
   writerIdentified?: string;
+  queryImageBase64?: string;
 }
 
 export interface CreateTaskRequest {

@@ -47,6 +47,10 @@ const TaskExecutor: React.FC = () => {
   // Task execution loading state
   const [executingTaskId, setExecutingTaskId] = useState<string | null>(null);
 
+  // Task details state
+  const [detailedTask, setDetailedTask] = useState<Task | null>(null);
+  const [loadingTaskDetails, setLoadingTaskDetails] = useState(false);
+
   // Query image state
   const [queryImageBase64, setQueryImageBase64] = useState<string>('');
   const [queryImageFile, setQueryImageFile] = useState<any>(null);
@@ -224,6 +228,23 @@ const TaskExecutor: React.FC = () => {
       // Error handled by useEffect
     } finally {
       setExecutingTaskId(null);
+    }
+  };
+
+  // Fetch task details by ID for modal display
+  const fetchTaskDetails = async (taskId: string) => {
+    try {
+      setLoadingTaskDetails(true);
+      console.log('Fetching task details for:', taskId);
+      const taskDetails = await taskService.getTaskById(taskId);
+      console.log('Task details fetched:', taskDetails);
+      setDetailedTask(taskDetails);
+    } catch (error: any) {
+      console.error('Error fetching task details:', error);
+      message.error(error.response?.data?.message || 'Failed to fetch task details');
+      setDetailedTask(null);
+    } finally {
+      setLoadingTaskDetails(false);
     }
   };
 
@@ -433,6 +454,22 @@ const TaskExecutor: React.FC = () => {
       ),
     },
     {
+      title: 'Dataset',
+      dataIndex: 'datasetName',
+      key: 'datasetName',
+      render: (text) => (
+        <span className="dataset-name">{text}</span>
+      ),
+    },
+    {
+      title: 'Model',
+      dataIndex: 'modelName',
+      key: 'modelName',
+      render: (text) => (
+        <span className="model-name">{text}</span>
+      ),
+    },
+    {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
@@ -447,6 +484,12 @@ const TaskExecutor: React.FC = () => {
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (text) => new Date(text).toLocaleString(),
+    },
+    {
+      title: 'Modified At',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      render: (text) => text ? new Date(text).toLocaleString() : 'N/A',
     },
   ];
 
@@ -473,7 +516,10 @@ const TaskExecutor: React.FC = () => {
         setIsResultsModalOpen(true);
         break;
       case 'details':
-        setIsDetailsModalOpen(true);
+        if (selectedTask) {
+          setIsDetailsModalOpen(true);
+          fetchTaskDetails(selectedTask.id);
+        }
         break;
       default:
         break;
@@ -744,40 +790,54 @@ const TaskExecutor: React.FC = () => {
           </div>
         }
         open={isDetailsModalOpen}
-        onCancel={() => setIsDetailsModalOpen(false)}
+        onCancel={() => {
+          setIsDetailsModalOpen(false);
+          setDetailedTask(null);
+        }}
         footer={[
-          <Button key="close" onClick={() => setIsDetailsModalOpen(false)}>
+          <Button key="close" onClick={() => {
+            setIsDetailsModalOpen(false);
+            setDetailedTask(null);
+          }}>
             Close
           </Button>
         ]}
         width={600}
       >
-        {selectedTask && (
+        {loadingTaskDetails ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '16px', color: '#8c8c8c' }}>Loading task details...</div>
+          </div>
+        ) : detailedTask ? (
           <Descriptions column={1} bordered size="middle">
             <Descriptions.Item label="Task ID" labelStyle={{ width: '150px', fontWeight: '500' }}>
               <code style={{ fontSize: '12px', backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '4px' }}>
-                {selectedTask.id}
+                {detailedTask.id}
               </code>
             </Descriptions.Item>
             <Descriptions.Item label="Name" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.name}
+              {detailedTask.name}
             </Descriptions.Item>
             <Descriptions.Item label="Description" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.description}
+              {detailedTask.description}
             </Descriptions.Item>
-            <Descriptions.Item label="Dataset ID" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.datasetId}
+            <Descriptions.Item label="Dataset" labelStyle={{ fontWeight: '500' }}>
+              {detailedTask.datasetName}
             </Descriptions.Item>
-            <Descriptions.Item label="Model ID" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.modelId}
+            <Descriptions.Item label="Model" labelStyle={{ fontWeight: '500' }}>
+              {detailedTask.modelName}
             </Descriptions.Item>
             <Descriptions.Item label="Status" labelStyle={{ fontWeight: '500' }}>
-              <Tag color={getStatusColor(selectedTask.status)}>
-                {getStatusText(selectedTask.status)}
+              <Tag color={getStatusColor(detailedTask.status)}>
+                {getStatusText(detailedTask.status)}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Created At" labelStyle={{ fontWeight: '500' }}>
-              {new Date(selectedTask.createdAt).toLocaleString()}
+              {new Date(detailedTask.createdAt).toLocaleString()}
+            </Descriptions.Item>
+            <Descriptions.Item label="Modified At" labelStyle={{ fontWeight: '500' }}>
+              {detailedTask.updatedAt ? new Date(detailedTask.updatedAt).toLocaleString() : 'N/A'}
             </Descriptions.Item>
             <Descriptions.Item label="Query Image" labelStyle={{ fontWeight: '500' }}>
               <div style={{ 
@@ -787,17 +847,27 @@ const TaskExecutor: React.FC = () => {
                 textAlign: 'center',
                 backgroundColor: '#fafafa'
               }}>
-                <img 
-                  src="https://via.placeholder.com/250x150/ffffff/333333?text=Sample+Handwriting+Text" 
-                  alt="Query handwriting sample"
-                  style={{ 
-                    maxWidth: '250px', 
-                    maxHeight: '150px', 
-                    borderRadius: '4px',
-                    border: '2px solid #e0e0e0',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                  }}
-                />
+                {detailedTask.queryImageBase64 ? (
+                  <img 
+                    src={`data:image/jpeg;base64,${detailedTask.queryImageBase64}`}
+                    alt="Query handwriting sample"
+                    style={{ 
+                      maxWidth: '250px', 
+                      maxHeight: '150px', 
+                      borderRadius: '4px',
+                      border: '2px solid #e0e0e0',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    padding: '20px',
+                    color: '#8c8c8c',
+                    fontSize: '14px'
+                  }}>
+                    No query image available
+                  </div>
+                )}
                 <div style={{ 
                   marginTop: '8px', 
                   fontSize: '12px', 
@@ -809,6 +879,10 @@ const TaskExecutor: React.FC = () => {
               </div>
             </Descriptions.Item>
           </Descriptions>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#8c8c8c' }}>
+            No task details available
+          </div>
         )}
       </Modal>
 
@@ -839,11 +913,14 @@ const TaskExecutor: React.FC = () => {
             <Descriptions.Item label="Name" labelStyle={{ fontWeight: '500' }}>
               {selectedTask.name}
             </Descriptions.Item>
-            <Descriptions.Item label="Dataset ID" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.datasetId}
+            <Descriptions.Item label="Modified At" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.updatedAt ? new Date(selectedTask.updatedAt).toLocaleString() : 'N/A'}
             </Descriptions.Item>
-            <Descriptions.Item label="Model ID" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.modelId}
+            <Descriptions.Item label="Dataset" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.datasetName}
+            </Descriptions.Item>
+            <Descriptions.Item label="Model" labelStyle={{ fontWeight: '500' }}>
+              {selectedTask.modelName}
             </Descriptions.Item>
             <Descriptions.Item label="Writer Identified" labelStyle={{ fontWeight: '500' }}>
               <span style={{ color: '#4F46E5', fontWeight: '600' }}>
@@ -863,17 +940,27 @@ const TaskExecutor: React.FC = () => {
                 textAlign: 'center',
                 backgroundColor: '#fafafa'
               }}>
-                <img 
-                  src="https://via.placeholder.com/250x150/ffffff/333333?text=Sample+Handwriting+Text" 
-                  alt="Query handwriting sample"
-                  style={{ 
-                    maxWidth: '250px', 
-                    maxHeight: '150px', 
-                    borderRadius: '4px',
-                    border: '2px solid #e0e0e0',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                  }}
-                />
+                {selectedTask.queryImageBase64 ? (
+                  <img 
+                    src={`data:image/jpeg;base64,${selectedTask.queryImageBase64}`}
+                    alt="Query handwriting sample"
+                    style={{ 
+                      maxWidth: '250px', 
+                      maxHeight: '150px', 
+                      borderRadius: '4px',
+                      border: '2px solid #e0e0e0',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    padding: '20px',
+                    color: '#8c8c8c',
+                    fontSize: '14px'
+                  }}>
+                    No query image available
+                  </div>
+                )}
                 <div style={{ 
                   marginTop: '8px', 
                   fontSize: '12px', 
@@ -924,8 +1011,8 @@ const TaskExecutor: React.FC = () => {
             }}>
               <div><strong>Task ID:</strong> <code style={{ fontSize: '12px' }}>{selectedTask.id}</code></div>
               <div><strong>Name:</strong> {selectedTask.name}</div>
-              <div><strong>Dataset ID:</strong> {selectedTask.datasetId}</div>
-              <div><strong>Model ID:</strong> {selectedTask.modelId}</div>
+              <div><strong>Dataset:</strong> {selectedTask.datasetName}</div>
+              <div><strong>Model:</strong> {selectedTask.modelName}</div>
               <div><strong>Status:</strong> 
                 <Tag color={getStatusColor(selectedTask.status)} style={{ marginLeft: '8px' }}>
                   {getStatusText(selectedTask.status)}
