@@ -91,6 +91,17 @@ export const modelService = {
       throw error;
     }
   },
+
+  // Get model training results
+  getModelTrainingResults: async (id: string): Promise<any> => {
+    try {
+      const response = await api.get(`/api/v1/models/${id}/training-results`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching model training results:', error);
+      throw error;
+    }
+  },
 };
 
 export default modelService; 

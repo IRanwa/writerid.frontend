@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchAllModels, createModel, deleteModel } from '../../store/slices/modelsSlice';
 import { fetchDatasets } from '../../store/slices/datasetsSlice';
+import modelService from '../../services/modelService';
 import { 
   PlusOutlined, 
   MoreOutlined, 
@@ -56,6 +57,8 @@ const ModelsList: React.FC = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isTrainResultsModalOpen, setIsTrainResultsModalOpen] = useState(false);
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
+  const [trainingResults, setTrainingResults] = useState<any>(null);
+  const [loadingTrainingResults, setLoadingTrainingResults] = useState(false);
   const [newModelForm] = Form.useForm();
 
   // Fetch models on component mount
@@ -197,9 +200,9 @@ const ModelsList: React.FC = () => {
       },
       {
         key: 'viewResults',
-        label: 'View Train Results',
+        label: loadingTrainingResults ? 'Loading...' : 'View Train Results',
         icon: <InfoCircleOutlined />,
-        disabled: selectedModel.status !== 2, // 2 = Completed status
+        disabled: selectedModel.status !== 2 || loadingTrainingResults, // 2 = Completed status
       },
       {
         key: 'retrain',
@@ -222,7 +225,7 @@ const ModelsList: React.FC = () => {
         setIsDetailsModalOpen(true);
         break;
       case 'viewResults':
-        setIsTrainResultsModalOpen(true);
+        handleViewTrainingResults();
         break;
       case 'retrain':
         handleRetrainModel();
@@ -231,6 +234,26 @@ const ModelsList: React.FC = () => {
         setIsRemoveConfirmOpen(true);
         break;
     }
+  };
+
+  const handleViewTrainingResults = async () => {
+    if (!selectedModelKey) return;
+    
+    setLoadingTrainingResults(true);
+    try {
+      const results = await modelService.getModelTrainingResults(selectedModelKey.toString());
+      setTrainingResults(results);
+      setIsTrainResultsModalOpen(true);
+    } catch (error: any) {
+      message.error(`Failed to fetch training results: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+    } finally {
+      setLoadingTrainingResults(false);
+    }
+  };
+
+  const handleTrainResultsModalClose = () => {
+    setIsTrainResultsModalOpen(false);
+    setTrainingResults(null);
   };
 
   const handleRetrainModel = () => {
@@ -512,6 +535,9 @@ const ModelsList: React.FC = () => {
               <strong>Name:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.name}</span>
             </div>
             <div style={{ marginBottom: '16px' }}>
+              <strong>Training Dataset:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.trainingDatasetName}</span>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
               <strong>Status:</strong> 
               <Tag color={getStatusColor(getSelectedModel()?.status || 0)} style={{ marginLeft: '8px' }}>
                 {getStatusText(getSelectedModel()?.status || 0)}
@@ -519,12 +545,6 @@ const ModelsList: React.FC = () => {
             </div>
             <div style={{ marginBottom: '16px' }}>
               <strong>Created At:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.createdAt}</span>
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <strong>Training Dataset:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.trainingDatasetName}</span>
-            </div>
-            <div style={{ marginBottom: '16px' }}>
-              <strong>Backbone:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.performanceData?.backbone || 'N/A'}</span>
             </div>
             
             {/* Performance Summary - only show for processed models */}
@@ -574,16 +594,43 @@ const ModelsList: React.FC = () => {
           </div>
         }
         open={isTrainResultsModalOpen}
-        onCancel={() => setIsTrainResultsModalOpen(false)}
+        onCancel={handleTrainResultsModalClose}
         footer={[
-          <Button key="close" onClick={() => setIsTrainResultsModalOpen(false)}>
+          <Button key="close" onClick={handleTrainResultsModalClose}>
             Close
           </Button>
         ]}
         width={1000}
       >
-        {getSelectedModel() && getSelectedModel()?.performanceData && (
+        {loadingTrainingResults && (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Spin size="large" />
+            <p style={{ marginTop: '16px', color: '#666' }}>Loading training results...</p>
+          </div>
+        )}
+        {!loadingTrainingResults && getSelectedModel() && (trainingResults || getSelectedModel()?.performanceData) && (
           <div style={{ marginTop: '20px' }}>
+            {/* Show success message if training results loaded from API */}
+            {trainingResults?.message && !trainingResults?.trainingResults?.error && (
+              <Alert
+                message="Training Results"
+                description={trainingResults.message}
+                type="success"
+                showIcon
+                style={{ marginBottom: '24px' }}
+              />
+            )}
+            
+            {/* Show error message if training failed */}
+            {trainingResults?.trainingResults?.error && (
+              <Alert
+                message="Training Error"
+                description={trainingResults.trainingResults.error}
+                type="error"
+                showIcon
+                style={{ marginBottom: '24px' }}
+              />
+            )}
             {/* Training Details */}
             <div style={{ marginBottom: '24px' }}>
               <h4 style={{ margin: '0 0 12px 0', color: '#1F2937', fontSize: '14px', fontWeight: 600 }}>
@@ -592,24 +639,66 @@ const ModelsList: React.FC = () => {
               <Row gutter={16} style={{ backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
                 <Col span={8}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4F46E5' }}>{getSelectedModel()?.performanceData?.time.toFixed(2)}s</div>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4F46E5' }}>
+                      {((trainingResults?.trainingResults?.time || getSelectedModel()?.performanceData?.time || 0)).toFixed(2)}s
+                    </div>
                     <div style={{ fontSize: '12px', color: '#666', fontWeight: '500' }}>Training Time</div>
                   </div>
                 </Col>
                 <Col span={8}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#059669' }}>{getSelectedModel()?.performanceData?.actual_episodes_run}/{getSelectedModel()?.performanceData?.requested_episodes}</div>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#059669' }}>
+                      {trainingResults?.trainingResults?.actual_episodes_run || getSelectedModel()?.performanceData?.actual_episodes_run || 0}/
+                      {trainingResults?.trainingResults?.requested_episodes || getSelectedModel()?.performanceData?.requested_episodes || 0}
+                    </div>
                     <div style={{ fontSize: '12px', color: '#666', fontWeight: '500' }}>Episodes Completed</div>
                   </div>
                 </Col>
                 <Col span={8}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#DC2626' }}>{getSelectedModel()?.performanceData?.optimal_val_episode}</div>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#DC2626' }}>
+                      {trainingResults?.trainingResults?.optimal_val_episode || getSelectedModel()?.performanceData?.optimal_val_episode || 0}
+                    </div>
                     <div style={{ fontSize: '12px', color: '#666', fontWeight: '500' }}>Optimal Episode</div>
                   </div>
                 </Col>
               </Row>
             </div>
+
+            {/* Additional Training Metrics - only show if from API */}
+            {trainingResults?.trainingResults && (
+              <div style={{ marginBottom: '24px' }}>
+                <h4 style={{ margin: '0 0 12px 0', color: '#1F2937', fontSize: '14px', fontWeight: 600 }}>
+                  Additional Training Metrics
+                </h4>
+                <Row gutter={16} style={{ backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                  <Col span={8}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8B5CF6' }}>
+                        {trainingResults.trainingResults.best_val_accuracy?.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666', fontWeight: '500' }}>Best Validation Accuracy</div>
+                    </div>
+                  </Col>
+                  <Col span={8}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#F59E0B' }}>
+                        {trainingResults.trainingResults.optimal_threshold}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666', fontWeight: '500' }}>Optimal Threshold</div>
+                    </div>
+                  </Col>
+                  <Col span={8}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10B981' }}>
+                        {(trainingResults.trainingResults.threshold_accuracy * 100).toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666', fontWeight: '500' }}>Threshold Accuracy</div>
+                    </div>
+                  </Col>
+                </Row>
+              </div>
+            )}
 
             {/* Performance Metrics Chart */}
             <div style={{ marginBottom: '24px' }}>
@@ -620,10 +709,10 @@ const ModelsList: React.FC = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={[
-                      { name: 'Accuracy', value: getSelectedModel()?.performanceData?.accuracy || 0 },
-                      { name: 'Precision', value: getSelectedModel()?.performanceData?.precision || 0 },
-                      { name: 'Recall', value: getSelectedModel()?.performanceData?.recall || 0 },
-                      { name: 'F1-Score', value: getSelectedModel()?.performanceData?.f1_score || 0 },
+                      { name: 'Accuracy', value: trainingResults?.trainingResults?.accuracy || getSelectedModel()?.performanceData?.accuracy || 0 },
+                      { name: 'Precision', value: trainingResults?.trainingResults?.precision || getSelectedModel()?.performanceData?.precision || 0 },
+                      { name: 'Recall', value: trainingResults?.trainingResults?.recall || getSelectedModel()?.performanceData?.recall || 0 },
+                      { name: 'F1-Score', value: trainingResults?.trainingResults?.f1_score || getSelectedModel()?.performanceData?.f1_score || 0 },
                     ]}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                   >
@@ -750,11 +839,12 @@ const ModelsList: React.FC = () => {
                       borderRadius: '8px',
                       border: '1px solid #e9ecef'
                     }}>
-                      {getSelectedModel()?.performanceData?.confusion_matrix.flat().map((value, index) => {
+                      {(trainingResults?.trainingResults?.confusion_matrix || getSelectedModel()?.performanceData?.confusion_matrix || []).flat().map((value: number, index: number) => {
                         const row = Math.floor(index / 5);
                         const col = index % 5;
                         const isDiagonal = row === col;
-                        const maxValue = Math.max(...(getSelectedModel()?.performanceData?.confusion_matrix.flat() || [30]));
+                        const confusionMatrix = trainingResults?.trainingResults?.confusion_matrix || getSelectedModel()?.performanceData?.confusion_matrix || [];
+                        const maxValue = Math.max(...(confusionMatrix.flat() || [30]));
                         const intensity = Math.min(value / maxValue, 1);
                         
                         return (
