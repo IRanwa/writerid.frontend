@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Dropdown, Modal, Form, Input, Select, Alert, Radio, Row, Col } from 'antd';
+import { Table, Button, Space, Tag, Dropdown, Modal, Form, Input, Select, Alert, Radio, Row, Col, Spin, message } from 'antd';
 import { useLocation } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { fetchAllModels } from '../../store/slices/modelsSlice';
+import { fetchDatasets } from '../../store/slices/datasetsSlice';
 import { 
   PlusOutlined, 
   MoreOutlined, 
@@ -14,12 +17,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import type { MenuProps } from 'antd';
 import type { Key } from 'react';
 
-// Model interface
+// Model interface for table data
 interface ModelData {
   key: string;
   modelId: string;
   name: string;
-  status: 'processed' | 'failed' | 'processing';
+  status: 'processed' | 'failed' | 'processing' | 'created' | 'training' | 'trained';
   createdAt: string;
   trainedOn: string;
   accuracy?: number;
@@ -42,6 +45,10 @@ interface ModelData {
 
 const ModelsList: React.FC = () => {
   const location = useLocation();
+  const dispatch = useAppDispatch();
+  const { models, loading, error } = useAppSelector((state) => state.models);
+  const { datasets, loading: datasetsLoading, error: datasetsError } = useAppSelector((state) => state.datasets);
+  
   const [selectedModelKey, setSelectedModelKey] = useState<Key | null>(null);
   const [isNewModelModalOpen, setIsNewModelModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -49,79 +56,58 @@ const ModelsList: React.FC = () => {
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
   const [newModelForm] = Form.useForm();
 
+  // Fetch models on component mount
+  useEffect(() => {
+    dispatch(fetchAllModels());
+  }, [dispatch]);
+
   // Auto-open modal when navigated from Dashboard
   useEffect(() => {
     if (location.state?.openNewModelModal) {
       setIsNewModelModalOpen(true);
+      // Also fetch datasets when auto-opening
+      dispatch(fetchDatasets());
     }
-  }, [location]);
+  }, [location, dispatch]);
 
-  // Mock model data
-  const modelData: ModelData[] = [
-    {
-      key: '1',
-      modelId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Historical Dataset Model',
-      status: 'processed',
-      createdAt: '2024-01-15 14:30:22',
-      trainedOn: 'Historical Dataset',
-      accuracy: 43.2,
-      performanceData: {
-        dataset_path: "./temp_data/writer-dataset-1",
-        accuracy: 43.2,
-        f1_score: 43.10567903133625,
-        precision: 43.60713995421749,
-        recall: 43.2,
-        confusion_matrix: [
-          [27, 5, 6, 10, 2],
-          [11, 19, 4, 7, 9],
-          [13, 6, 22, 5, 4],
-          [9, 7, 8, 20, 6],
-          [6, 9, 6, 9, 20]
-        ],
-        time: 9.65393369999947,
-        requested_episodes: 10,
-        actual_episodes_run: 10,
-        optimal_val_episode: 0,
-        best_val_accuracy: -1.0,
-        backbone: "googlenet",
-        error: null
-      }
-    },
-    {
-      key: '2',
-      modelId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Modern Dataset Model',
-      status: 'failed',
-      createdAt: '2024-01-14 09:15:18',
-      trainedOn: 'Modern Dataset'
-    },
-    {
-      key: '3',
-      modelId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Mixed Dataset Model',
-      status: 'processing',
-      createdAt: '2024-01-16 11:45:33',
-      trainedOn: 'Mixed Dataset'
-    },
-    {
-      key: '4',
-      modelId: 'a1397625-1565-4642-8636-1ddd8df8b0d1',
-      name: 'Custom Dataset Model',
-      status: 'processing',
-      createdAt: '2024-01-16 16:20:15',
-      trainedOn: 'Custom Dataset'
+  // Show error message if API call fails
+  useEffect(() => {
+    if (error) {
+      message.error(`Failed to fetch models: ${error}`);
     }
-  ];
+  }, [error]);
+
+  // Show error message if datasets API call fails
+  useEffect(() => {
+    if (datasetsError) {
+      message.error(`Failed to fetch datasets: ${datasetsError}`);
+    }
+  }, [datasetsError]);
+
+  // Transform Redux models to match the expected format
+  const modelData: ModelData[] = models.map((model) => ({
+    key: model.id,
+    modelId: model.id,
+    name: model.name,
+    status: model.status as ModelData['status'],
+    createdAt: model.createdAt,
+    trainedOn: model.trainedOn || model.description || 'Unknown Dataset',
+    accuracy: model.accuracy,
+    performanceData: model.performanceData
+  }));
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'processed':
+      case 'trained':
         return 'success';
       case 'failed':
         return 'error';
       case 'processing':
+      case 'training':
         return 'processing';
+      case 'created':
+        return 'default';
       default:
         return 'default';
     }
@@ -131,10 +117,16 @@ const ModelsList: React.FC = () => {
     switch (status) {
       case 'processed':
         return 'Processed';
+      case 'trained':
+        return 'Trained';
       case 'failed':
         return 'Failed';
       case 'processing':
         return 'Processing';
+      case 'training':
+        return 'Training';
+      case 'created':
+        return 'Created';
       default:
         return 'Unknown';
     }
@@ -248,6 +240,17 @@ const ModelsList: React.FC = () => {
     newModelForm.resetFields();
   };
 
+  const handleNewModelClick = () => {
+    setIsNewModelModalOpen(true);
+    // Fetch datasets when opening the modal
+    dispatch(fetchDatasets());
+  };
+
+  // Filter datasets to show only completed ones for model training
+  const getAvailableDatasets = () => {
+    return datasets.filter(dataset => dataset.status === 2); // 2 = Completed status
+  };
+
   const columns = [
     {
       title: '',
@@ -312,7 +315,7 @@ const ModelsList: React.FC = () => {
           <Button 
             type="primary" 
             icon={<PlusOutlined />}
-            onClick={() => setIsNewModelModalOpen(true)}
+            onClick={handleNewModelClick}
             style={{ backgroundColor: '#4F46E5', borderColor: '#4F46E5' }}
           >
             New Model
@@ -325,6 +328,7 @@ const ModelsList: React.FC = () => {
         <Table
           columns={columns}
           dataSource={modelData}
+          loading={loading}
           pagination={{
             showSizeChanger: true,
             showQuickJumper: true,
@@ -383,14 +387,18 @@ const ModelsList: React.FC = () => {
             required={false}
           >
             <Select 
-              placeholder="Select dataset for training"
+              placeholder={datasetsLoading ? "Loading datasets..." : "Select dataset for training"}
               size="large"
               style={{ borderRadius: '6px' }}
+              loading={datasetsLoading}
+              disabled={datasetsLoading}
+              notFoundContent={datasetsLoading ? "Loading..." : "No completed datasets available"}
             >
-              <Select.Option value="historical">Historical Dataset</Select.Option>
-              <Select.Option value="modern">Modern Dataset</Select.Option>
-              <Select.Option value="mixed">Mixed Dataset</Select.Option>
-              <Select.Option value="custom">Custom Dataset</Select.Option>
+              {getAvailableDatasets().map((dataset) => (
+                <Select.Option key={dataset.id} value={dataset.id}>
+                  {dataset.name}
+                </Select.Option>
+              ))}
             </Select>
           </Form.Item>
 
