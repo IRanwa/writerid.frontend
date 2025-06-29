@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, Button, Space, Tag, Dropdown, Modal, Form, Input, Select, Alert, Radio, Row, Col, Spin, message } from 'antd';
 import { useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { fetchAllModels, createModel, deleteModel } from '../../store/slices/modelsSlice';
+import { fetchAllModels, createModel, deleteModel, fetchModelById } from '../../store/slices/modelsSlice';
 import { fetchDatasets } from '../../store/slices/datasetsSlice';
 import modelService from '../../services/modelService';
 import { 
@@ -59,6 +59,10 @@ const ModelsList: React.FC = () => {
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
   const [trainingResults, setTrainingResults] = useState<any>(null);
   const [loadingTrainingResults, setLoadingTrainingResults] = useState(false);
+  const [retrainingModel, setRetrainingModel] = useState(false);
+  const [creatingModel, setCreatingModel] = useState(false);
+  const [removingModel, setRemovingModel] = useState(false);
+  const [loadingModelDetails, setLoadingModelDetails] = useState(false);
   const [newModelForm] = Form.useForm();
 
   // Fetch models on component mount
@@ -192,37 +196,47 @@ const ModelsList: React.FC = () => {
       ];
     }
 
-    return [
+    const actions = [
       {
         key: 'view',
-        label: 'View Details',
+        label: loadingModelDetails ? 'Loading...' : 'View Details',
         icon: <EyeOutlined />,
-      },
-      {
-        key: 'viewResults',
-        label: loadingTrainingResults ? 'Loading...' : 'View Train Results',
-        icon: <InfoCircleOutlined />,
-        disabled: selectedModel.status !== 2 || loadingTrainingResults, // 2 = Completed status
-      },
-      {
-        key: 'retrain',
-        label: 'Retrain Model',
-        icon: <PlayCircleOutlined />,
-        disabled: selectedModel.status === 1, // 1 = Processing status
-      },
-      {
-        key: 'remove',
-        label: 'Remove Model',
-        icon: <DeleteOutlined />,
-        danger: true,
+        disabled: loadingModelDetails,
       },
     ];
+
+    // Hide these actions if model is in processing status (status 1)
+    if (selectedModel.status !== 1) {
+      actions.push(
+        {
+          key: 'viewResults',
+          label: loadingTrainingResults ? 'Loading...' : 'View Train Results',
+          icon: <InfoCircleOutlined />,
+          disabled: selectedModel.status !== 2 || loadingTrainingResults, // Disabled if not completed or loading
+        } as any,
+        {
+          key: 'retrain',
+          label: retrainingModel ? 'Retraining...' : 'Retrain Model',
+          icon: <PlayCircleOutlined />,
+          disabled: retrainingModel, // Disabled only when currently retraining
+        } as any,
+        {
+          key: 'remove',
+          label: removingModel ? 'Removing...' : 'Remove Model',
+          icon: <DeleteOutlined />,
+          disabled: removingModel,
+          danger: true,
+        } as any
+      );
+    }
+
+    return actions;
   };
 
   const handleActionClick = ({ key }: { key: string }) => {
     switch (key) {
       case 'view':
-        setIsDetailsModalOpen(true);
+        handleViewModelDetails();
         break;
       case 'viewResults':
         handleViewTrainingResults();
@@ -233,6 +247,21 @@ const ModelsList: React.FC = () => {
       case 'remove':
         setIsRemoveConfirmOpen(true);
         break;
+    }
+  };
+
+  const handleViewModelDetails = async () => {
+    if (!selectedModelKey) return;
+    
+    setLoadingModelDetails(true);
+    try {
+      // Fetch fresh model details
+      await dispatch(fetchModelById(selectedModelKey.toString())).unwrap();
+      setIsDetailsModalOpen(true);
+    } catch (error: any) {
+      message.error(`Failed to load model details: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+    } finally {
+      setLoadingModelDetails(false);
     }
   };
 
@@ -256,17 +285,31 @@ const ModelsList: React.FC = () => {
     setTrainingResults(null);
   };
 
-  const handleRetrainModel = () => {
-    console.log('Retraining model:', selectedModelKey);
-    Modal.success({
-      title: 'Retraining Started',
-      content: 'Model retraining has been initiated. You will be notified when it completes.',
-    });
+  const handleRetrainModel = async () => {
+    if (!selectedModelKey) return;
+    
+    setRetrainingModel(true);
+    try {
+      await modelService.retrainModel(selectedModelKey.toString());
+      
+      // Show success toast message
+      message.success('Model retraining initiated successfully!');
+      
+      // Refresh the grid
+      dispatch(fetchAllModels());
+      
+    } catch (error: any) {
+      // Show error toast message
+      message.error(`Failed to initiate retraining: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+    } finally {
+      setRetrainingModel(false);
+    }
   };
 
   const handleRemoveModel = async () => {
     if (!selectedModelKey) return;
     
+    setRemovingModel(true);
     try {
       await dispatch(deleteModel(selectedModelKey.toString())).unwrap();
       message.success('Model removed successfully!');
@@ -274,11 +317,14 @@ const ModelsList: React.FC = () => {
       setSelectedModelKey(null);
     } catch (error: any) {
       message.error(`Failed to remove model: ${error}`);
+    } finally {
+      setRemovingModel(false);
     }
   };
 
   const handleCreateModel = () => {
     newModelForm.validateFields().then(async (values) => {
+      setCreatingModel(true);
       try {
         const modelData = {
           name: values.name,
@@ -302,6 +348,8 @@ const ModelsList: React.FC = () => {
         
       } catch (error: any) {
         message.error(`Failed to create model: ${error}`);
+      } finally {
+        setCreatingModel(false);
       }
     });
   };
@@ -447,20 +495,23 @@ const ModelsList: React.FC = () => {
         open={isNewModelModalOpen}
         onCancel={handleNewModelModalClose}
         footer={[
-          <Button key="cancel" onClick={handleNewModelModalClose}>
+          <Button key="cancel" onClick={handleNewModelModalClose} disabled={creatingModel}>
             Cancel
           </Button>,
           <Button 
             key="create" 
             type="primary" 
             onClick={handleCreateModel}
+            loading={creatingModel}
+            disabled={creatingModel}
             style={{ backgroundColor: '#4F46E5', borderColor: '#4F46E5' }}
           >
-            Create Model
+            {creatingModel ? 'Creating...' : 'Create Model'}
           </Button>
         ]}
         width={600}
-        maskClosable={false}
+        maskClosable={!creatingModel}
+        closable={!creatingModel}
       >
         <Form
           form={newModelForm}
@@ -523,7 +574,13 @@ const ModelsList: React.FC = () => {
         ]}
         width={900}
       >
-        {getSelectedModel() && (
+        {loadingModelDetails && (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <Spin size="large" />
+            <p style={{ marginTop: '16px', color: '#666' }}>Loading model details...</p>
+          </div>
+        )}
+        {!loadingModelDetails && getSelectedModel() && (
           <div style={{ marginTop: '20px' }}>
             <div style={{ marginBottom: '16px' }}>
               <strong>Model ID:</strong> 
@@ -941,9 +998,18 @@ const ModelsList: React.FC = () => {
         open={isRemoveConfirmOpen}
         onCancel={() => setIsRemoveConfirmOpen(false)}
         onOk={handleRemoveModel}
-        okText="Remove Model"
+        okText={removingModel ? "Removing..." : "Remove Model"}
         cancelText="Cancel"
-        okButtonProps={{ danger: true }}
+        okButtonProps={{ 
+          danger: true, 
+          loading: removingModel,
+          disabled: removingModel
+        }}
+        cancelButtonProps={{
+          disabled: removingModel
+        }}
+        closable={!removingModel}
+        maskClosable={!removingModel}
         width={500}
       >
         {getSelectedModel() && (

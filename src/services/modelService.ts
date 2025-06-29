@@ -102,6 +102,17 @@ export const modelService = {
       throw error;
     }
   },
+
+  // Retrain model
+  retrainModel: async (id: string): Promise<any> => {
+    try {
+      const response = await api.post(`/api/v1/models/${id}/retrain`);
+      return response.data;
+    } catch (error) {
+      console.error('Error retraining model:', error);
+      throw error;
+    }
+  },
 };
 
 export default modelService; 
