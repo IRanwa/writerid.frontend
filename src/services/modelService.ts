@@ -13,6 +13,7 @@ export interface ModelResponse {
   hyperparameters?: Record<string, any>;
   results?: any;
   datasetId?: string;
+  trainingDatasetName?: string;
   trainedOn?: string;
   performanceData?: {
     dataset_path: string;
@@ -29,6 +30,19 @@ export interface ModelResponse {
     backbone: string;
     error: string | null;
   };
+}
+
+export interface CreateModelRequest {
+  name: string;
+  trainingDatasetId: string;
+}
+
+export interface CreateModelResponse {
+  id: string;
+  name: string;
+  trainingDatasetId: string;
+  status: string;
+  createdAt: string;
 }
 
 export const modelService = {
@@ -50,6 +64,30 @@ export const modelService = {
       return response.data;
     } catch (error) {
       console.error('Error fetching model:', error);
+      throw error;
+    }
+  },
+
+  // Create new model
+  createModel: async (modelData: CreateModelRequest): Promise<CreateModelResponse> => {
+    try {
+      const response = await api.post('/api/v1/models', {
+        name: modelData.name,
+        trainingDatasetId: modelData.trainingDatasetId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error creating model:', error);
+      throw error;
+    }
+  },
+
+  // Delete model
+  deleteModel: async (id: string): Promise<void> => {
+    try {
+      await api.delete(`/api/v1/models/${id}`);
+    } catch (error) {
+      console.error('Error deleting model:', error);
       throw error;
     }
   },

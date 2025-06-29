@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, Button, Space, Tag, Dropdown, Modal, Form, Input, Select, Alert, Radio, Row, Col, Spin, message } from 'antd';
 import { useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { fetchAllModels } from '../../store/slices/modelsSlice';
+import { fetchAllModels, createModel, deleteModel } from '../../store/slices/modelsSlice';
 import { fetchDatasets } from '../../store/slices/datasetsSlice';
 import { 
   PlusOutlined, 
@@ -22,9 +22,11 @@ interface ModelData {
   key: string;
   modelId: string;
   name: string;
-  status: 'processed' | 'failed' | 'processing' | 'created' | 'training' | 'trained';
+  status: number; // Same as datasets: 0=Created, 1=Processing, 2=Completed, 3=Failed
   createdAt: string;
-  trainedOn: string;
+  updatedAt: string;
+  trainingDatasetName: string;
+  trainingDatasetId?: string;
   accuracy?: number;
   performanceData?: {
     dataset_path: string;
@@ -89,46 +91,64 @@ const ModelsList: React.FC = () => {
     key: model.id,
     modelId: model.id,
     name: model.name,
-    status: model.status as ModelData['status'],
+    status: model.status, // Already numeric from Redux store
     createdAt: model.createdAt,
-    trainedOn: model.trainedOn || model.description || 'Unknown Dataset',
+    updatedAt: model.updatedAt || model.createdAt,
+    trainingDatasetId: model.datasetId,
+    trainingDatasetName: model.trainingDatasetName || model.trainedOn || 'Unknown Dataset',
     accuracy: model.accuracy,
     performanceData: model.performanceData
   }));
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: number) => {
     switch (status) {
-      case 'processed':
-      case 'trained':
-        return 'success';
-      case 'failed':
-        return 'error';
-      case 'processing':
-      case 'training':
-        return 'processing';
-      case 'created':
+      case 0: // Created
         return 'default';
+      case 1: // Processing
+        return 'processing';
+      case 2: // Completed
+        return 'success';
+      case 3: // Failed
+        return 'error';
       default:
         return 'default';
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: number) => {
     switch (status) {
-      case 'processed':
-        return 'Processed';
-      case 'trained':
-        return 'Trained';
-      case 'failed':
-        return 'Failed';
-      case 'processing':
-        return 'Processing';
-      case 'training':
-        return 'Training';
-      case 'created':
+      case 0:
         return 'Created';
+      case 1:
+        return 'Processing';
+      case 2:
+        return 'Completed';
+      case 3:
+        return 'Failed';
       default:
         return 'Unknown';
+    }
+  };
+
+  // Helper function to convert string status to numeric status (like datasets)
+  const getStatusNumber = (status: string | number | undefined): number => {
+    if (typeof status === 'number') return status;
+    if (!status || typeof status !== 'string') return 0; // Default to 'Created' if undefined
+    
+    switch (status.toLowerCase()) {
+      case 'created':
+        return 0;
+      case 'processing':
+      case 'training':
+        return 1;
+      case 'processed':
+      case 'trained':
+      case 'completed':
+        return 2;
+      case 'failed':
+        return 3;
+      default:
+        return 0;
     }
   };
 
@@ -179,13 +199,13 @@ const ModelsList: React.FC = () => {
         key: 'viewResults',
         label: 'View Train Results',
         icon: <InfoCircleOutlined />,
-        disabled: selectedModel.status !== 'processed',
+        disabled: selectedModel.status !== 2, // 2 = Completed status
       },
       {
         key: 'retrain',
         label: 'Retrain Model',
         icon: <PlayCircleOutlined />,
-        disabled: selectedModel.status === 'processing',
+        disabled: selectedModel.status === 1, // 1 = Processing status
       },
       {
         key: 'remove',
@@ -221,17 +241,45 @@ const ModelsList: React.FC = () => {
     });
   };
 
-  const handleRemoveModel = () => {
-    console.log('Removing model:', selectedModelKey);
-    setIsRemoveConfirmOpen(false);
-    setSelectedModelKey(null);
+  const handleRemoveModel = async () => {
+    if (!selectedModelKey) return;
+    
+    try {
+      await dispatch(deleteModel(selectedModelKey.toString())).unwrap();
+      message.success('Model removed successfully!');
+      setIsRemoveConfirmOpen(false);
+      setSelectedModelKey(null);
+    } catch (error: any) {
+      message.error(`Failed to remove model: ${error}`);
+    }
   };
 
   const handleCreateModel = () => {
-    newModelForm.validateFields().then((values) => {
-      console.log('Creating model:', values);
-      setIsNewModelModalOpen(false);
-      newModelForm.resetFields();
+    newModelForm.validateFields().then(async (values) => {
+      try {
+        const modelData = {
+          name: values.name,
+          trainingDatasetId: values.dataset
+        };
+        
+        // Create the model via API
+        await dispatch(createModel(modelData)).unwrap();
+        
+        // Show success toast
+        message.success('Model created successfully!');
+        
+        // Close the popup
+        setIsNewModelModalOpen(false);
+        
+        // Reset the form
+        newModelForm.resetFields();
+        
+        // Refresh the table by calling get all models
+        dispatch(fetchAllModels());
+        
+      } catch (error: any) {
+        message.error(`Failed to create model: ${error}`);
+      }
     });
   };
 
@@ -267,8 +315,9 @@ const ModelsList: React.FC = () => {
       title: 'Model ID',
       dataIndex: 'modelId',
       key: 'modelId',
+      width: 300,
       render: (id: string) => (
-        <code className="task-id">{id}</code>
+        <span className="task-id">{id}</span>
       ),
     },
     {
@@ -276,17 +325,45 @@ const ModelsList: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       render: (name: string) => (
-        <span className="model-name">{name}</span>
+        <span className="model-name" style={{ fontWeight: 500 }}>{name}</span>
+      ),
+    },
+    {
+      title: 'Training Dataset',
+      dataIndex: 'trainingDatasetName',
+      key: 'trainingDatasetName',
+      render: (datasetName: string) => (
+        <span style={{ color: '#666' }}>{datasetName}</span>
       ),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)} className="status-tag">
+      render: (status: number) => (
+        <Tag color={getStatusColor(status)}>
           {getStatusText(status)}
         </Tag>
+      ),
+    },
+    {
+      title: 'Created At',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (date: string) => (
+        <span style={{ color: '#666', fontSize: '13px' }}>
+          {new Date(date).toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      title: 'Updated At',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      render: (date: string) => (
+        <span style={{ color: '#666', fontSize: '13px' }}>
+          {new Date(date).toLocaleString()}
+        </span>
       ),
     },
   ];
@@ -436,22 +513,22 @@ const ModelsList: React.FC = () => {
             </div>
             <div style={{ marginBottom: '16px' }}>
               <strong>Status:</strong> 
-              <Tag color={getStatusColor(getSelectedModel()?.status || '')} style={{ marginLeft: '8px' }}>
-                {getStatusText(getSelectedModel()?.status || '')}
+              <Tag color={getStatusColor(getSelectedModel()?.status || 0)} style={{ marginLeft: '8px' }}>
+                {getStatusText(getSelectedModel()?.status || 0)}
               </Tag>
             </div>
             <div style={{ marginBottom: '16px' }}>
               <strong>Created At:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.createdAt}</span>
             </div>
             <div style={{ marginBottom: '16px' }}>
-              <strong>Trained On:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.trainedOn}</span>
+              <strong>Training Dataset:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.trainingDatasetName}</span>
             </div>
             <div style={{ marginBottom: '16px' }}>
               <strong>Backbone:</strong> <span style={{ marginLeft: '8px' }}>{getSelectedModel()?.performanceData?.backbone || 'N/A'}</span>
             </div>
             
             {/* Performance Summary - only show for processed models */}
-            {getSelectedModel()?.status === 'processed' && getSelectedModel()?.performanceData && (
+            {getSelectedModel()?.status === 2 && getSelectedModel()?.performanceData && (
               <>
                 <div style={{ 
                   borderTop: '1px solid #e5e7eb', 
@@ -799,12 +876,6 @@ const ModelsList: React.FC = () => {
             }}>
               <div><strong>Model ID:</strong> <code style={{ fontSize: '12px' }}>{getSelectedModel()?.modelId}</code></div>
               <div><strong>Name:</strong> {getSelectedModel()?.name}</div>
-              <div><strong>Status:</strong> 
-                <Tag color={getStatusColor(getSelectedModel()?.status || '')} style={{ marginLeft: '8px' }}>
-                  {getStatusText(getSelectedModel()?.status || '')}
-                </Tag>
-              </div>
-              <div><strong>Trained On:</strong> {getSelectedModel()?.trainedOn}</div>
             </div>
           </div>
         )}
