@@ -1,49 +1,43 @@
-import React from 'react';
-import { Row, Col, Card, Statistic, Timeline, Button, Tag, Space } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Row, Col, Card, Statistic, Button, Space, Spin, Alert } from 'antd';
 import { 
   FileOutlined, 
   DatabaseOutlined, 
   ExperimentOutlined, 
   PlayCircleOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { dashboardService, DashboardStats } from '../../services/dashboardService';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  
+  // State for dashboard stats
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data for demonstration
-  const mockStats = {
-    totalTaskExecutions: 127,
-    totalCompletedTasks: 89,
-    totalDatasets: 24,
-    totalCustomModels: 15
-  };
+  // Fetch dashboard stats on component mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await dashboardService.getStats();
+        setStats(data);
+      } catch (err) {
+        setError('Failed to load dashboard statistics');
+        console.error('Error fetching dashboard stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const mockActivity = [
-    {
-      id: '1',
-      type: 'task' as const,
-      action: 'Task "Writer Classification" completed successfully',
-      timestamp: '2 minutes ago',
-      status: 'success' as const
-    },
-    {
-      id: '2', 
-      type: 'model' as const,
-      action: 'Model "CNN Writer Classifier" training started',
-      timestamp: '5 minutes ago',
-      status: 'processing' as const
-    },
-    {
-      id: '3',
-      type: 'dataset' as const,
-      action: 'Dataset "Handwriting Samples" uploaded',
-      timestamp: '10 minutes ago',
-      status: 'success' as const
-    }
-  ];
+    fetchStats();
+  }, []);
+
+
 
   // Navigation handlers for quick actions
   const handleCreateTaskClick = () => {
@@ -64,15 +58,27 @@ const Dashboard: React.FC = () => {
         Dashboard
       </h1>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert 
+          message="Error" 
+          description={error} 
+          type="error" 
+          showIcon 
+          style={{ marginBottom: '24px' }}
+        />
+      )}
+
       {/* Statistics Cards */}
       <Row gutter={[24, 24]} style={{ marginBottom: '40px' }}>
         <Col xs={24} sm={12} lg={6}>
           <Card className="stats-card stats-card-blue">
             <Statistic
               title={<span className="stats-title">Total Tasks</span>}
-              value={mockStats.totalTaskExecutions}
+              value={loading ? 0 : stats?.totalTasks || 0}
               prefix={<PlayCircleOutlined className="stats-icon" />}
               valueStyle={{ color: '#ffffff', fontSize: '32px', fontWeight: 'bold' }}
+              loading={loading}
             />
           </Card>
         </Col>
@@ -81,9 +87,10 @@ const Dashboard: React.FC = () => {
           <Card className="stats-card stats-card-green">
             <Statistic
               title={<span className="stats-title">Complete Tasks</span>}
-              value={mockStats.totalCompletedTasks}
+              value={loading ? 0 : stats?.completedTasks || 0}
               prefix={<CheckCircleOutlined className="stats-icon" />}
               valueStyle={{ color: '#ffffff', fontSize: '32px', fontWeight: 'bold' }}
+              loading={loading}
             />
           </Card>
         </Col>
@@ -92,9 +99,10 @@ const Dashboard: React.FC = () => {
           <Card className="stats-card stats-card-purple">
             <Statistic
               title={<span className="stats-title">Total Datasets</span>}
-              value={mockStats.totalDatasets}
+              value={loading ? 0 : stats?.totalDatasets || 0}
               prefix={<DatabaseOutlined className="stats-icon" />}
               valueStyle={{ color: '#ffffff', fontSize: '32px', fontWeight: 'bold' }}
+              loading={loading}
             />
           </Card>
         </Col>
@@ -103,9 +111,10 @@ const Dashboard: React.FC = () => {
           <Card className="stats-card stats-card-orange">
             <Statistic
               title={<span className="stats-title">Total Models</span>}
-              value={mockStats.totalCustomModels}
+              value={loading ? 0 : stats?.totalModels || 0}
               prefix={<ExperimentOutlined className="stats-icon" />}
               valueStyle={{ color: '#ffffff', fontSize: '32px', fontWeight: 'bold' }}
+              loading={loading}
             />
           </Card>
         </Col>
@@ -115,7 +124,7 @@ const Dashboard: React.FC = () => {
 
       <Row gutter={[16, 16]}>
         {/* Quick Actions */}
-        <Col xs={24} lg={12}>
+        <Col xs={24} lg={24}>
           <Card 
             title={<span className="card-title">Quick Actions</span>}
             className="full-height-card"
@@ -149,43 +158,6 @@ const Dashboard: React.FC = () => {
                 Create New Model
               </Button>
             </Space>
-          </Card>
-        </Col>
-
-        {/* Recent Activity */}
-        <Col xs={24} lg={12}>
-          <Card 
-            title={<span className="card-title">Recent Activity</span>}
-            className="full-height-card"
-          >
-            <Timeline>
-              {mockActivity.map((activity) => (
-                <Timeline.Item
-                  key={activity.id}
-                                     dot={
-                     activity.status === 'processing' ? (
-                       <ClockCircleOutlined className="processing-icon" />
-                     ) : (
-                       <CheckCircleOutlined className="success-icon" />
-                     )
-                   }
-                 >
-                   <div>
-                     <p className="activity-text">
-                       {activity.action}
-                     </p>
-                     <div className="flex-column-center">
-                       <Tag className={`status-tag-${activity.status}`}>
-                         {activity.status.toUpperCase()}
-                       </Tag>
-                       <span className="activity-timestamp">
-                         {activity.timestamp}
-                       </span>
-                     </div>
-                   </div>
-                </Timeline.Item>
-              ))}
-            </Timeline>
           </Card>
         </Col>
       </Row>
