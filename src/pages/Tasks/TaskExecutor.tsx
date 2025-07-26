@@ -10,13 +10,15 @@ import {
   EyeOutlined,
   InfoCircleOutlined,
   ExclamationCircleOutlined,
-  UploadOutlined
+  UploadOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Key } from 'antd/es/table/interface';
 import { RootState, AppDispatch } from '../../store/store';
 import { fetchTasks, createTask, executeTask, deleteTask, setCurrentTask, clearError } from '../../store/slices/tasksSlice';
 import { fetchDatasets } from '../../store/slices/datasetsSlice';
+import { fetchAllModels, Model } from '../../store/slices/modelsSlice';
 import { Task, Writer } from '../../services/taskService';
 import taskService from '../../services/taskService';
 
@@ -41,6 +43,7 @@ const TaskExecutor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { tasks, loading, error, executing, total } = useSelector((state: RootState) => state.tasks);
   const { datasets } = useSelector((state: RootState) => state.datasets);
+  const { models, loading: modelsLoading } = useSelector((state: RootState) => state.models);
   
   const [selectedTaskKey, setSelectedTaskKey] = useState<React.Key | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -53,6 +56,9 @@ const TaskExecutor: React.FC = () => {
   const [writers, setWriters] = useState<Writer[]>([]);
   const [writersLoading, setWritersLoading] = useState(false);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
+
+  // Model selection state
+  const [useDefaultModel, setUseDefaultModel] = useState(true);
 
   // Task execution loading state
   const [executingTaskId, setExecutingTaskId] = useState<string | null>(null);
@@ -91,8 +97,9 @@ const TaskExecutor: React.FC = () => {
   useEffect(() => {
     if (location.state?.openCreateModal) {
       setIsCreateTaskModalOpen(true);
-      // Fetch datasets when modal opens from navigation
+      // Fetch datasets and models when modal opens from navigation
       dispatch(fetchDatasets());
+      dispatch(fetchAllModels());
     }
   }, [location, dispatch]);
 
@@ -345,7 +352,8 @@ const TaskExecutor: React.FC = () => {
         description: values.description || `Task created with writers: ${selectedWriterNames.join(', ')} for dataset: ${selectedDataset?.name || 'Unknown'}`,
         datasetId: values.dataset, // Send as string (Guid)
         selectedWriters: selectedWriterNames, // Array of writer names (not IDs)
-        useDefaultModel: true, // Always true since we only have default model
+        useDefaultModel: useDefaultModel,
+        modelId: useDefaultModel ? undefined : values.modelId,
         queryImageBase64: queryImageBase64, // Base64 encoded image
       };
 
@@ -358,6 +366,7 @@ const TaskExecutor: React.FC = () => {
       setWriters([]);
       setQueryImageBase64('');
       setQueryImageFile(null);
+      setUseDefaultModel(true);
       
       // Set creating task loading state
       setCreatingTask(true);
@@ -404,13 +413,25 @@ const TaskExecutor: React.FC = () => {
     setWriters([]);
     setQueryImageBase64('');
     setQueryImageFile(null);
+    setUseDefaultModel(true);
   };
 
   // Handle opening create task modal and fetch datasets
   const handleOpenCreateTaskModal = () => {
     setIsCreateTaskModalOpen(true);
-    // Fetch datasets when modal opens
+    // Fetch datasets and models when modal opens
     dispatch(fetchDatasets());
+    dispatch(fetchAllModels());
+  };
+
+  // Handle model type change
+  const handleModelTypeChange = (e: any) => {
+    const useDefault = e.target.value;
+    setUseDefaultModel(useDefault);
+    
+    if (useDefault) {
+      createTaskForm.setFieldsValue({ modelId: undefined });
+    }
   };
 
   // Get completed datasets only (status = 2)
@@ -701,6 +722,9 @@ const TaskExecutor: React.FC = () => {
           form={createTaskForm}
           layout="vertical"
           style={{ marginTop: '20px' }}
+          initialValues={{
+            useDefaultModel: true
+          }}
         >
           <div style={{ marginBottom: '24px' }}>
             <label style={{ 
@@ -758,6 +782,70 @@ const TaskExecutor: React.FC = () => {
                 ))}
               </Select>
             </Form.Item>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '8px', 
+              fontWeight: '600',
+              color: '#000000d9',
+              fontSize: '14px'
+            }}>
+              <span style={{ color: '#ff4d4f' }}>*</span> Model Selection
+            </label>
+            <div style={{ marginBottom: '16px' }}>
+              <Form.Item
+                name="useDefaultModel"
+                style={{ marginBottom: 0 }}
+              >
+                <Radio.Group onChange={handleModelTypeChange} value={useDefaultModel}>
+                  <Space direction="vertical">
+                    <Radio value={true}>Use Default Model</Radio>
+                    <Radio value={false}>Use Custom Trained Model</Radio>
+                  </Space>
+                </Radio.Group>
+              </Form.Item>
+            </div>
+            {!useDefaultModel && (
+              <Form.Item
+                name="modelId"
+                rules={[{ required: !useDefaultModel, message: 'Please select a model!' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Select 
+                  placeholder={modelsLoading ? "Loading models..." : models.filter((model: Model) => model.status === 2).length > 0 ? "Select a trained model" : "No trained models available"}
+                  size="large"
+                  loading={modelsLoading}
+                  disabled={modelsLoading || models.filter((model: Model) => model.status === 2).length === 0}
+                  notFoundContent={modelsLoading ? "Loading models..." : "No trained models found"}
+                  allowClear
+                  suffixIcon={<ExperimentOutlined />}
+                >
+                  {models.filter((model: Model) => model.status === 2).map(model => (
+                    <Select.Option key={model.id} value={model.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{model.name}</span>
+                        {model.accuracy && (
+                          <span style={{ color: '#666', fontSize: '12px' }}>
+                            {`${(model.accuracy * 100).toFixed(1)}%`}
+                          </span>
+                        )}
+                      </div>
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            )}
+            {!useDefaultModel && models.filter((model: Model) => model.status === 2).length === 0 && !modelsLoading && (
+              <Alert
+                message="No trained models available"
+                description="Please train a model first or use the default model option."
+                type="warning"
+                showIcon
+                style={{ marginTop: '8px' }}
+              />
+            )}
           </div>
 
           <div style={{ marginBottom: '24px' }}>
