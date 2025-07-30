@@ -168,7 +168,7 @@ const CreateTask: React.FC = () => {
         queryImageBase64: queryImageBase64
       };
 
-      const newTask = await taskService.createTask(createTaskData);
+      await taskService.createTask(createTaskData);
       message.success('Task created successfully!');
       navigate('/tasks');
       

@@ -7,7 +7,6 @@ import {
   MoreOutlined,
   ReloadOutlined,
   DeleteOutlined,
-  EyeOutlined,
   InfoCircleOutlined,
   ExclamationCircleOutlined,
   UploadOutlined,
@@ -16,7 +15,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type { Key } from 'antd/es/table/interface';
 import { RootState, AppDispatch } from '../../store/store';
-import { fetchTasks, createTask, executeTask, deleteTask, setCurrentTask, clearError } from '../../store/slices/tasksSlice';
+import { fetchTasks, createTask, executeTask, deleteTask, clearError } from '../../store/slices/tasksSlice';
 import { fetchDatasets } from '../../store/slices/datasetsSlice';
 import { fetchAllModels, Model } from '../../store/slices/modelsSlice';
 import { Task, Writer } from '../../services/taskService';
@@ -47,7 +46,7 @@ const TaskExecutor: React.FC = () => {
   
   const [selectedTaskKey, setSelectedTaskKey] = useState<React.Key | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [createTaskForm] = Form.useForm();
@@ -72,18 +71,16 @@ const TaskExecutor: React.FC = () => {
 
   // Prediction results state
   const [predictionResults, setPredictionResults] = useState<PredictionResults | null>(null);
-  const [loadingPredictionResults, setLoadingPredictionResults] = useState(false);
 
   // Query image state
   const [queryImageBase64, setQueryImageBase64] = useState<string>('');
-  const [queryImageFile, setQueryImageFile] = useState<any>(null);
+  const [, setQueryImageFile] = useState<any>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   // Writers transfer data (legacy - will be replaced by real data)
-  const [writersData] = useState<WriterItem[]>([]);
   const [selectedWriters, setSelectedWriters] = useState<Key[]>(['6']);
   const [selectedKeys, setSelectedKeys] = useState<Key[]>([]);
 
@@ -184,12 +181,6 @@ const TaskExecutor: React.FC = () => {
     // Add status-specific actions
     if (selectedTask.status === 2) { // Completed
       items.push({
-        key: 'results',
-        label: 'View Results',
-        icon: <EyeOutlined />,
-        disabled: false,
-      });
-      items.push({
         key: 'retry',
         label: executingTaskId === selectedTask.id ? 'Retrying...' : 'Retry Task',
         icon: <ReloadOutlined spin={executingTaskId === selectedTask.id} />,
@@ -261,10 +252,11 @@ const TaskExecutor: React.FC = () => {
       const updatedTasksResult = await dispatch(fetchTasks()).unwrap();
       console.log('Grid refreshed after task execution:', updatedTasksResult);
       
-      // Auto-open results modal for executed task when "Task Execution Completed!" is shown
-      console.log('Auto-opening results modal for executed task:', taskId);
+      // Auto-open details modal for executed task when "Task Execution Completed!" is shown
+      console.log('Auto-opening details modal for executed task:', taskId);
       setSelectedTaskKey(taskId);
-      setIsResultsModalOpen(true);
+      setIsDetailsModalOpen(true);
+      fetchTaskDetails(taskId);
       fetchPredictionResults(taskId);
     } catch (err) {
       // Error handled by useEffect
@@ -293,7 +285,6 @@ const TaskExecutor: React.FC = () => {
   // Fetch prediction results for completed task
   const fetchPredictionResults = async (taskId: string) => {
     try {
-      setLoadingPredictionResults(true);
       console.log('Fetching prediction results for:', taskId);
       const results = await taskService.getPredictionResults(taskId);
       console.log('Prediction results fetched:', results);
@@ -302,8 +293,6 @@ const TaskExecutor: React.FC = () => {
       console.error('Error fetching prediction results:', error);
       message.error(error.response?.data?.message || 'Failed to fetch prediction results');
       setPredictionResults(null);
-    } finally {
-      setLoadingPredictionResults(false);
     }
   };
 
@@ -382,12 +371,13 @@ const TaskExecutor: React.FC = () => {
       const updatedTasksResult = await dispatch(fetchTasks()).unwrap();
       console.log('Grid refreshed after task creation:', updatedTasksResult);
       
-      // Auto-open results modal for newly created task (should be the first task after refresh)
+      // Auto-open details modal for newly created task (should be the first task after refresh)
       if (updatedTasksResult.tasks.length > 0) {
         const newestTask = updatedTasksResult.tasks[0]; // First task should be the newest after refresh
-        console.log('Auto-opening results modal for newest task:', newestTask.id);
+        console.log('Auto-opening details modal for newest task:', newestTask.id);
         setSelectedTaskKey(newestTask.id);
-        setIsResultsModalOpen(true);
+        setIsDetailsModalOpen(true);
+        fetchTaskDetails(newestTask.id);
         fetchPredictionResults(newestTask.id);
       }
     } catch (errorInfo) {
@@ -601,16 +591,14 @@ const TaskExecutor: React.FC = () => {
       case 'remove':
         setIsRemoveConfirmOpen(true);
         break;
-      case 'results':
-        if (selectedTask) {
-          setIsResultsModalOpen(true);
-          fetchPredictionResults(selectedTask.id);
-        }
-        break;
       case 'details':
         if (selectedTask) {
           setIsDetailsModalOpen(true);
           fetchTaskDetails(selectedTask.id);
+          // Also fetch prediction results for completed tasks
+          if (selectedTask.status === 2) {
+            fetchPredictionResults(selectedTask.id);
+          }
         }
         break;
       default:
@@ -683,7 +671,7 @@ const TaskExecutor: React.FC = () => {
               setCurrentPage(page);
               setPageSize(size || 10);
             },
-            onShowSizeChange: (current, size) => {
+            onShowSizeChange: (_, size) => {
               setCurrentPage(1); // Reset to first page when changing page size
               setPageSize(size);
             },
@@ -964,11 +952,13 @@ const TaskExecutor: React.FC = () => {
         onCancel={() => {
           setIsDetailsModalOpen(false);
           setDetailedTask(null);
+          setPredictionResults(null);
         }}
         footer={[
           <Button key="close" onClick={() => {
             setIsDetailsModalOpen(false);
             setDetailedTask(null);
+            setPredictionResults(null);
           }}>
             Close
           </Button>
@@ -1020,6 +1010,73 @@ const TaskExecutor: React.FC = () => {
             <Descriptions.Item label="Modified At" labelStyle={{ fontWeight: '500' }}>
               {detailedTask.updatedAt ? new Date(detailedTask.updatedAt).toLocaleString() : 'N/A'}
             </Descriptions.Item>
+            {detailedTask.status === 2 && (
+              <>
+                <Descriptions.Item label="Writer Identified" labelStyle={{ fontWeight: '500' }}>
+                  {(() => {
+                    const writerId = predictionResults?.prediction?.writer_id || detailedTask.writerIdentified;
+                    const isUnknown = writerId === 'unknown' || !writerId;
+                    const displayText = writerId || 'N/A';
+                    
+                    return (
+                      <span style={{ 
+                        color: isUnknown ? '#EF4444' : '#4F46E5', 
+                        fontWeight: '600' 
+                      }}>
+                        {displayText}
+                      </span>
+                    );
+                  })()}
+                </Descriptions.Item>
+                <Descriptions.Item label="Accuracy" labelStyle={{ fontWeight: '500' }}>
+                  {(() => {
+                    const writerId = predictionResults?.prediction?.writer_id || detailedTask.writerIdentified;
+                    const confidence = predictionResults?.prediction?.confidence;
+                    const taskAccuracy = detailedTask.accuracy;
+                    let displayText = 'N/A';
+                    let color = '#EF4444'; // Default red for N/A
+                    
+                    // If writer is unknown, always show N/A in red
+                    if (writerId === 'unknown') {
+                      displayText = 'N/A';
+                      color = '#EF4444';
+                    } else if (confidence !== undefined && confidence !== null) {
+                      const accuracyPercent = confidence * 100;
+                      displayText = `${accuracyPercent.toFixed(2)}%`;
+                      
+                      // Color logic based on accuracy percentage
+                      if (accuracyPercent >= 75) {
+                        color = '#10B981'; // Green for >= 75%
+                      } else if (accuracyPercent >= 50) {
+                        color = '#F59E0B'; // Orange for 50-74%
+                      } else {
+                        color = '#EF4444'; // Red for < 50%
+                      }
+                    } else if (taskAccuracy !== undefined && taskAccuracy !== null) {
+                      displayText = `${taskAccuracy}%`;
+                      
+                      // Color logic based on accuracy percentage
+                      if (taskAccuracy >= 75) {
+                        color = '#10B981'; // Green for >= 75%
+                      } else if (taskAccuracy >= 50) {
+                        color = '#F59E0B'; // Orange for 50-74%
+                      } else {
+                        color = '#EF4444'; // Red for < 50%
+                      }
+                    }
+                    
+                    return (
+                      <span style={{ 
+                        color: color, 
+                        fontWeight: '600' 
+                      }}>
+                        {displayText}
+                      </span>
+                    );
+                  })()}
+                </Descriptions.Item>
+              </>
+            )}
             <Descriptions.Item label="Query Image" labelStyle={{ fontWeight: '500' }}>
               <div style={{ 
                 border: '2px dashed #d9d9d9', 
@@ -1028,9 +1085,9 @@ const TaskExecutor: React.FC = () => {
                 textAlign: 'center',
                 backgroundColor: '#fafafa'
               }}>
-                {detailedTask.queryImageBase64 ? (
+                {(predictionResults?.query_image_base64 || detailedTask.queryImageBase64) ? (
                   <img 
-                    src={`data:image/jpeg;base64,${detailedTask.queryImageBase64}`}
+                    src={`data:image/jpeg;base64,${predictionResults?.query_image_base64 || detailedTask.queryImageBase64}`}
                     alt="Query handwriting sample"
                     style={{ 
                       maxWidth: '250px', 
@@ -1067,151 +1124,7 @@ const TaskExecutor: React.FC = () => {
         )}
       </Modal>
 
-      {/* View Results Modal */}
-      <Modal
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <EyeOutlined style={{ color: '#10B981' }} />
-            Task Results
-          </div>
-        }
-        open={isResultsModalOpen}
-        onCancel={() => {
-          setIsResultsModalOpen(false);
-          setPredictionResults(null);
-        }}
-        footer={[
-          <Button key="close" onClick={() => {
-            setIsResultsModalOpen(false);
-            setPredictionResults(null);
-          }}>
-            Close
-          </Button>
-        ]}
-        width={700}
-      >
-        {loadingPredictionResults ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <Spin size="large" />
-            <div style={{ marginTop: '16px', color: '#8c8c8c' }}>Loading prediction results...</div>
-          </div>
-        ) : selectedTask && (
-          <Descriptions column={1} bordered size="middle">
-            <Descriptions.Item label="Task ID" labelStyle={{ width: '150px', fontWeight: '500' }}>
-              <code style={{ fontSize: '12px', backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: '4px' }}>
-                {selectedTask.id}
-              </code>
-            </Descriptions.Item>
-            <Descriptions.Item label="Name" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.name}
-            </Descriptions.Item>
-            <Descriptions.Item label="Dataset" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.datasetName}
-            </Descriptions.Item>
-            <Descriptions.Item label="Model" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.modelName}
-            </Descriptions.Item>
-            <Descriptions.Item label="Selected Writers" labelStyle={{ fontWeight: '500' }}>
-              {selectedTask.selectedWriters && selectedTask.selectedWriters.length > 0 ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {selectedTask.selectedWriters.map((writer, index) => (
-                    <Tag key={index} color="blue" style={{ margin: '2px' }}>
-                      {writer}
-                    </Tag>
-                  ))}
-                </div>
-              ) : (
-                <span style={{ color: '#8c8c8c', fontStyle: 'italic' }}>No writers selected</span>
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="Writer Identified" labelStyle={{ fontWeight: '500' }}>
-              {(() => {
-                const writerId = predictionResults?.prediction?.writer_id || selectedTask.writerIdentified;
-                const isUnknown = writerId === 'unknown' || !writerId;
-                const displayText = writerId || 'N/A';
-                
-                return (
-                  <span style={{ 
-                    color: isUnknown ? '#EF4444' : '#4F46E5', 
-                    fontWeight: '600' 
-                  }}>
-                    {displayText}
-                  </span>
-                );
-              })()}
-            </Descriptions.Item>
-            <Descriptions.Item label="Accuracy" labelStyle={{ fontWeight: '500' }}>
-              {(() => {
-                const writerId = predictionResults?.prediction?.writer_id || selectedTask.writerIdentified;
-                const confidence = predictionResults?.prediction?.confidence;
-                const taskAccuracy = selectedTask.accuracy;
-                let displayText = 'N/A';
-                let isNA = true;
-                
-                // If writer is unknown, always show N/A in red
-                if (writerId === 'unknown') {
-                  displayText = 'N/A';
-                  isNA = true;
-                } else if (confidence !== undefined && confidence !== null) {
-                  displayText = `${(confidence * 100).toFixed(2)}%`;
-                  isNA = false;
-                } else if (taskAccuracy !== undefined && taskAccuracy !== null) {
-                  displayText = `${taskAccuracy}%`;
-                  isNA = false;
-                }
-                
-                return (
-                  <span style={{ 
-                    color: isNA ? '#EF4444' : '#10B981', 
-                    fontWeight: '600' 
-                  }}>
-                    {displayText}
-                  </span>
-                );
-              })()}
-            </Descriptions.Item>
-            <Descriptions.Item label="Query Image" labelStyle={{ fontWeight: '500' }}>
-              <div style={{ 
-                border: '2px dashed #d9d9d9', 
-                borderRadius: '8px', 
-                padding: '16px', 
-                textAlign: 'center',
-                backgroundColor: '#fafafa'
-              }}>
-                {predictionResults?.query_image_base64 ? (
-                  <img 
-                    src={`data:image/jpeg;base64,${predictionResults.query_image_base64}`}
-                    alt="Query handwriting sample"
-                    style={{ 
-                      maxWidth: '250px', 
-                      maxHeight: '150px', 
-                      borderRadius: '4px',
-                      border: '2px solid #e0e0e0',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    padding: '20px',
-                    color: '#8c8c8c',
-                    fontSize: '14px'
-                  }}>
-                    No query image available
-                  </div>
-                )}
-                <div style={{ 
-                  marginTop: '8px', 
-                  fontSize: '12px', 
-                  color: '#666',
-                  fontStyle: 'italic' 
-                }}>
-                  Query handwriting sample
-                </div>
-              </div>
-            </Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
+
 
       {/* Remove Task Confirmation Modal */}
       <Modal

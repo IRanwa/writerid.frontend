@@ -137,28 +137,6 @@ const ModelsList: React.FC = () => {
     }
   };
 
-  // Helper function to convert string status to numeric status (like datasets)
-  const getStatusNumber = (status: string | number | undefined): number => {
-    if (typeof status === 'number') return status;
-    if (!status || typeof status !== 'string') return 0; // Default to 'Created' if undefined
-    
-    switch (status.toLowerCase()) {
-      case 'created':
-        return 0;
-      case 'processing':
-      case 'training':
-        return 1;
-      case 'processed':
-      case 'trained':
-      case 'completed':
-        return 2;
-      case 'failed':
-        return 3;
-      default:
-        return 0;
-    }
-  };
-
   const getSelectedModel = () => {
     return modelData.find(model => model.key === selectedModelKey);
   };

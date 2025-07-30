@@ -25,10 +25,6 @@ export interface CreateDatasetResponse {
   createdAt: string;
 }
 
-export interface AnalysisRequest {
-  datasetId: string;
-}
-
 export interface AnalysisResults {
   id: string;
   datasetId: string;
