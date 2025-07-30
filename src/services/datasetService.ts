@@ -35,9 +35,8 @@ export interface AnalysisResults {
 }
 
 const getDatasets = async (): Promise<Dataset[]> => {
-  try {
-    const response = await api.get('/api/v1/Datasets');
-    console.log('Get datasets response:', response.data);
+      try {
+      const response = await api.get('/api/v1/Datasets');
     return response.data || [];
   } catch (error: any) {
     console.error('Get datasets error:', error);
@@ -46,9 +45,8 @@ const getDatasets = async (): Promise<Dataset[]> => {
 };
 
 const createDataset = async (datasetData: CreateDatasetRequest): Promise<CreateDatasetResponse> => {
-  try {
-    const response = await api.post('/api/v1/Datasets', datasetData);
-    console.log('Create dataset response:', response.data);
+      try {
+      const response = await api.post('/api/v1/Datasets', datasetData);
     return response.data;
   } catch (error: any) {
     console.error('Create dataset error:', error);
@@ -59,7 +57,6 @@ const createDataset = async (datasetData: CreateDatasetRequest): Promise<CreateD
 const startAnalysis = async (datasetId: string): Promise<void> => {
   try {
     const response = await api.post(`/api/v1/Datasets/${datasetId}/analyze`);
-    console.log('Start analysis response:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('Start analysis error:', error);
@@ -70,7 +67,6 @@ const startAnalysis = async (datasetId: string): Promise<void> => {
 const getAnalysisResults = async (datasetId: string): Promise<AnalysisResults> => {
   try {
     const response = await api.get(`/api/v1/Datasets/${datasetId}/analysis-results`);
-    console.log('Get analysis results response:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('Get analysis results error:', error);
@@ -81,7 +77,6 @@ const getAnalysisResults = async (datasetId: string): Promise<AnalysisResults> =
 const deleteDataset = async (datasetId: string): Promise<void> => {
   try {
     const response = await api.delete(`/api/v1/Datasets/${datasetId}`);
-    console.log('Delete dataset response:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('Delete dataset error:', error);
@@ -92,7 +87,6 @@ const deleteDataset = async (datasetId: string): Promise<void> => {
 const generateSasUrl = async (datasetId: string): Promise<{ sasUrl: string }> => {
   try {
     const response = await api.post(`/api/v1/Datasets/${datasetId}/generate-sas`);
-    console.log('Generate SAS URL response:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('Generate SAS URL error:', error);

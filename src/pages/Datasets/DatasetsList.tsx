@@ -182,13 +182,8 @@ const DatasetsList: React.FC = () => {
   };
 
   const handleActionClick = ({ key }: { key: string }) => {
-    console.log('Action clicked:', key);
-    console.log('Selected dataset key:', selectedDatasetKey);
-    console.log('Selected dataset object:', getSelectedDataset());
-    
     switch (key) {
       case 'view':
-        console.log('Opening details modal');
         setIsDetailsModalOpen(true);
         
         // Fetch analysis results if dataset is completed (status = 2)
@@ -199,7 +194,6 @@ const DatasetsList: React.FC = () => {
           
           datasetService.getAnalysisResults(selectedDataset.id)
             .then((results) => {
-              console.log('Analysis results fetched:', results);
               setAnalysisResults(results);
             })
             .catch((error) => {
@@ -267,10 +261,8 @@ const DatasetsList: React.FC = () => {
   const handleCreateDataset = async () => {
     try {
       const values = await newDatasetForm.validateFields();
-      console.log('Creating dataset:', values);
       
       const result = await dispatch(createDataset({ name: values.name })).unwrap();
-      console.log('Dataset created:', result);
       
       // Show the SAS URL
       setSasUrl(result.sasUrl);

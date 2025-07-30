@@ -97,7 +97,6 @@ export const loginUser = createAsyncThunk<AuthResponse, LoginFormData>(
     async (userData, { rejectWithValue }) => {
       try {
         const data = await authService.login(userData);
-        console.log('Login thunk received:', data);
         
         // Extract and store token
         const token = extractToken(data);
@@ -146,7 +145,6 @@ export const authSlice = createSlice({
         state.error = null;
       })
       .addCase(loginUser.fulfilled, (state, action: PayloadAction<AuthResponse>) => {
-        console.log('Login fulfilled with payload:', action.payload);
         state.loading = 'succeeded';
         state.isAuthenticated = true;
         

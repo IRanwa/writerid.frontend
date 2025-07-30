@@ -6,9 +6,7 @@ export const fetchTasks = createAsyncThunk<TasksResponse>(
   'tasks/fetchTasks',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('Fetching tasks...');
       const result = await taskService.getTasks();
-      console.log('Tasks fetched successfully:', result);
       return result;
     } catch (error: any) {
       console.error('Error in fetchTasks thunk:', error);

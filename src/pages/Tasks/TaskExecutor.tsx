@@ -86,7 +86,6 @@ const TaskExecutor: React.FC = () => {
 
   // Fetch tasks on component mount
   useEffect(() => {
-    console.log('TaskExecutor: Dispatching fetchTasks...');
     dispatch(fetchTasks());
   }, [dispatch]);
 
@@ -108,26 +107,9 @@ const TaskExecutor: React.FC = () => {
     }
   }, [error, dispatch]);
 
-  // Debug logging for Redux state changes
-  useEffect(() => {
-    console.log('TaskExecutor Redux state updated:', {
-      tasksCount: tasks.length,
-      tasks,
-      loading,
-      error,
-      total
-    });
-  }, [tasks, loading, error, total]);
 
-  // Debug logging for writers state changes
-  useEffect(() => {
-    console.log('Writers state changed:', {
-      writersCount: writers.length,
-      writers,
-      selectedDatasetId,
-      writersLoading
-    });
-  }, [writers, selectedDatasetId, writersLoading]);
+
+
 
   const getStatusColor = (status: number) => {
     switch (status) {
@@ -250,10 +232,8 @@ const TaskExecutor: React.FC = () => {
       
       // Refresh tasks to get updated status
       const updatedTasksResult = await dispatch(fetchTasks()).unwrap();
-      console.log('Grid refreshed after task execution:', updatedTasksResult);
       
       // Auto-open details modal for executed task when "Task Execution Completed!" is shown
-      console.log('Auto-opening details modal for executed task:', taskId);
       setSelectedTaskKey(taskId);
       setIsDetailsModalOpen(true);
       fetchTaskDetails(taskId);
@@ -269,9 +249,7 @@ const TaskExecutor: React.FC = () => {
   const fetchTaskDetails = async (taskId: string) => {
     try {
       setLoadingTaskDetails(true);
-      console.log('Fetching task details for:', taskId);
       const taskDetails = await taskService.getTaskById(taskId);
-      console.log('Task details fetched:', taskDetails);
       setDetailedTask(taskDetails);
     } catch (error: any) {
       console.error('Error fetching task details:', error);
@@ -285,9 +263,7 @@ const TaskExecutor: React.FC = () => {
   // Fetch prediction results for completed task
   const fetchPredictionResults = async (taskId: string) => {
     try {
-      console.log('Fetching prediction results for:', taskId);
       const results = await taskService.getPredictionResults(taskId);
-      console.log('Prediction results fetched:', results);
       setPredictionResults(results);
     } catch (error: any) {
       console.error('Error fetching prediction results:', error);
@@ -331,10 +307,7 @@ const TaskExecutor: React.FC = () => {
       const selectedDataset = completedDatasets.find(d => d.id === values.dataset);
       const selectedWriterNames = selectedWriters as string[]; // selectedWriters now contains writer names
       
-      console.log('Selected writers (names):', selectedWriters);
-      console.log('Selected writer names:', selectedWriterNames);
-      console.log('Available writers:', writers);
-      console.log('Query image base64 length:', queryImageBase64.length);
+
       
       const taskData = {
         name: values.name || `Task for ${selectedDataset?.name || 'Selected Dataset'}`,
@@ -362,27 +335,22 @@ const TaskExecutor: React.FC = () => {
 
       // Create task in background
       const createdTaskResponse = await dispatch(createTask(taskData)).unwrap();
-      console.log('Task created successfully:', createdTaskResponse);
       
       // Show success message (same as retry)
       message.success('Task Execution Completed!');
       
       // Refresh the tasks grid to get latest task status
       const updatedTasksResult = await dispatch(fetchTasks()).unwrap();
-      console.log('Grid refreshed after task creation:', updatedTasksResult);
       
       // Auto-open details modal for newly created task (should be the first task after refresh)
       if (updatedTasksResult.tasks.length > 0) {
         const newestTask = updatedTasksResult.tasks[0]; // First task should be the newest after refresh
-        console.log('Auto-opening details modal for newest task:', newestTask.id);
         setSelectedTaskKey(newestTask.id);
         setIsDetailsModalOpen(true);
         fetchTaskDetails(newestTask.id);
         fetchPredictionResults(newestTask.id);
       }
     } catch (errorInfo) {
-      console.log('Task creation failed:', errorInfo);
-      
       // Show error message
       message.error('Task creation failed. Please try again.');
       
@@ -432,19 +400,14 @@ const TaskExecutor: React.FC = () => {
     try {
       setWritersLoading(true);
       setSelectedDatasetId(datasetId);
-      console.log('Fetching writers for dataset:', datasetId);
       
       const analysisData = await taskService.getDatasetAnalysis(datasetId);
-      console.log('Dataset analysis response:', analysisData);
-      console.log('Writers from API:', analysisData.writers);
       
       setWriters(analysisData.writers || []);
       
       // Reset writer selection when dataset changes
       setSelectedWriters([]);
       setSelectedKeys([]);
-      
-      console.log('Writers state updated, length:', analysisData.writers?.length || 0);
     } catch (error: any) {
       console.error('Error fetching writers:', error);
       console.error('Error details:', error.response?.data);
@@ -464,13 +427,11 @@ const TaskExecutor: React.FC = () => {
 
   // Convert writers to transfer format
   const getWritersTransferData = (): WriterItem[] => {
-    console.log('getWritersTransferData called, writers state:', writers);
     const transferData = writers.map(writer => ({
       key: writer.writerName, // Use writer name as key since API expects writer names
       title: writer.writerName,
       description: writer.writerName,
     }));
-    console.log('Transfer data generated:', transferData);
     return transferData;
   };
 
@@ -574,7 +535,6 @@ const TaskExecutor: React.FC = () => {
 
   const handleActionClick = ({ key }: { key: string }) => {
     const selectedTask = getSelectedTask();
-    console.log(`Action clicked: ${key}`, selectedTask);
     
     // Handle different actions
     switch (key) {

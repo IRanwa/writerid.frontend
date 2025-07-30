@@ -53,8 +53,6 @@ class TaskService {
   async getTasks(): Promise<TasksResponse> {
     try {
       const response = await api.get('/api/v1/Tasks');
-      console.log('Raw API response:', response);
-      console.log('Response data:', response.data);
       
       // Handle different possible response structures
       if (Array.isArray(response.data)) {
@@ -115,7 +113,6 @@ class TaskService {
   async getPredictionResults(id: string): Promise<any> {
     try {
       const response = await api.get(`/api/v1/Tasks/${id}/prediction`);
-      console.log('Prediction results response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching prediction results:', error);
@@ -127,7 +124,6 @@ class TaskService {
   async getDatasetAnalysis(datasetId: string): Promise<DatasetAnalysisResponse> {
     try {
       const response = await api.get(`/api/v1/Tasks/dataset/${datasetId}/analysis`);
-      console.log('Dataset analysis response:', response.data);
       
       // Handle the actual API response structure with writer_names
       if (response.data && response.data.writer_names && Array.isArray(response.data.writer_names)) {

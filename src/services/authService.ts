@@ -36,8 +36,6 @@ export interface AuthResponse {
 const login = async (userData: LoginFormData): Promise<AuthResponse> => {
   try {
     const response = await api.post('/api/v1/Auth/login', userData);
-    console.log('Full login response:', response); // Debug log
-    console.log('Login response data:', response.data); // Debug log
     
     // Handle different possible response structures
     if (!response.data) {
@@ -57,7 +55,6 @@ const login = async (userData: LoginFormData): Promise<AuthResponse> => {
 const register = async (userData: RegisterFormData) => {
   try {
     const response = await api.post('/api/v1/Auth/register', userData);
-    console.log('Register response:', response.data); // Debug log
     return response.data;
   } catch (error: any) {
     console.error('Register error:', error);
